@@ -6,51 +6,57 @@
 // Each car sends where it is 10 times a second; friends' cars are ghosts you drive through, each with a name tag, and
 // show on your map too. Everything else (traffic, police, money, the hunt) stays your own.
 // =====================================================================================================
-const NDNET = { mode: 'solo', cli: null, code: '', id: '', sendT: 0, others: new Map(), live: false, broker: -1 };
+const NDNET = { mode: 'solo', clis: [], code: '', id: '', q: 0, lastQ: new Map(), others: new Map(), live: false };
 const ND_VER = 2;                                  // only cars from the same version of the game see each other
 const ND_MQTT_SRC = ['https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js', 'https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js'];
-const ND_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt'];
+// every relay at once: each player may only be able to reach some of them (school and work networks often block the
+// unusual ports), so messages go out on all of them and any one relay you both reach is enough. shiftr uses port 443,
+// the normal web port, which is almost never blocked
+const ND_BROKERS = [{ url: 'wss://broker.hivemq.com:8884/mqtt' }, { url: 'wss://public.cloud.shiftr.io:443', username: 'public', password: 'public' }, { url: 'wss://test.mosquitto.org:8081/mqtt' }, { url: 'wss://broker.emqx.io:8084/mqtt' }];
 const ndTopic = () => 'night-driver-v' + ND_VER + '/room/' + NDNET.code;
 const ndNow = () => performance.now() / 1000;
 function ndLoadLib(){ return new Promise((ok, bad) => { if (window.mqtt) return ok(); let i = 0; const next = () => { if (i >= ND_MQTT_SRC.length) return bad(new Error('no mqtt')); const sc = document.createElement('script'); sc.src = ND_MQTT_SRC[i++]; sc.onload = () => window.mqtt ? ok() : next(); sc.onerror = next; document.head.appendChild(sc); }; next(); }); }
 function ndStatus(t){ const el = $('ndNet'); if (el) el.innerHTML = t; }
 const ndMyName = () => (($('ndName') && $('ndName').value) || (typeof PLAYER === 'string' && PLAYER) || 'DRIVER').toUpperCase().slice(0, 14);
 const ndState = () => ({ t: 's', v: ND_VER, id: NDNET.id, n: ndMyName(), c: CARV.id, col: pPaint.color.getHex(), x: +car.x.toFixed(2), y: +car.y.toFixed(2), z: +car.z.toFixed(2), h: +car.h.toFixed(4), v2: +car.vx.toFixed(2), st: +car.steerIn.toFixed(2), s: STATE.stars || 0 });
-function ndSend(m){ const c = NDNET.cli; if (c && c.connected) try { c.publish(ndTopic(), JSON.stringify(m), { qos: 0 }); } catch (e) {} }
-// connect to the first relay that answers, and listen on the room's channel
-function ndConnect(bi = 0){
+const ndRelaysUp = () => NDNET.clis.filter(c => c.connected && c.ndSub).length;
+function ndSend(m){ m.q = ++NDNET.q; const msg = JSON.stringify(m); for (const c of NDNET.clis) if (c.connected && c.ndSub) try { c.publish(ndTopic(), msg, { qos: 0 }); } catch (e) {} }
+function ndConnectAll(){
   return new Promise(ok => {
-    if (bi >= ND_BROKERS.length){ ok(false); return; }
     let done = false; const fin = r => { if (!done){ done = true; ok(r); } };
-    const bye = JSON.stringify({ t: 'bye', v: ND_VER, id: NDNET.id });
-    const c = mqtt.connect(ND_BROKERS[bi], { clientId: 'nd-' + NDNET.id, clean: true, connectTimeout: 7000, reconnectPeriod: 3000, keepalive: 30, will: { topic: ndTopic(), payload: bye, qos: 0, retain: false } });
-    const fail = setTimeout(() => { if (!c.connected){ try { c.end(true); } catch (e) {} ndConnect(bi + 1).then(fin); } }, 8000);
-    c.on('connect', () => { clearTimeout(fail); if (done){ return; } NDNET.cli = c; NDNET.broker = bi;
-      c.subscribe(ndTopic(), { qos: 0 }, err => { if (err){ try { c.end(true); } catch (e) {} ndConnect(bi + 1).then(fin); return; } NDNET.live = true; ndSend({ t: 'hi', v: ND_VER, id: NDNET.id, n: ndMyName() }); ndSend(ndState()); fin(true); }); });
-    c.on('message', (topic, buf) => { let m; try { m = JSON.parse(buf.toString()); } catch (e) { return; } ndOnData(m); });
-    c.on('reconnect', () => { if (NDNET.live) ndStatus('Reconnecting to room <b>' + NDNET.code + '</b>…'); });
-    c.on('connect', () => { if (NDNET.live) ndRoomStatus(); });
+    // (no 'last will' message: one relay dropping must not count as you leaving the room)
+    ND_BROKERS.forEach((B, bi) => { let c;
+      try { c = mqtt.connect(B.url, { clientId: 'nd-' + NDNET.id + '-' + bi, username: B.username, password: B.password, clean: true, connectTimeout: 8000, reconnectPeriod: 4000, keepalive: 30 }); } catch (e) { return; }
+      NDNET.clis.push(c);
+      c.on('connect', () => { c.subscribe(ndTopic(), { qos: 0 }, err => { if (err) return; c.ndSub = true; NDNET.live = true; ndSend({ t: 'hi', v: ND_VER, id: NDNET.id }); ndSend(ndState()); ndRoomStatus(); fin(true); }); });
+      c.on('close', () => { c.ndSub = false; if (NDNET.live) ndRoomStatus(); });
+      c.on('error', () => {});
+      c.on('message', (topic, buf) => { let m; try { m = JSON.parse(buf.toString()); } catch (e) { return; } ndOnData(m); }); });
+    setTimeout(() => fin(ndRelaysUp() > 0), 12000);
   });
 }
-function ndRoomStatus(){ const n = NDNET.others.size; ndStatus('In room <b>' + NDNET.code + '</b> · ' + (n ? n + (n > 1 ? ' friends' : ' friend') + ' here · press J to jump to them' : 'waiting for friends: send them the code') + ' · everyone needs this same game file'); }
+// your position goes out 10 times a second on its own timer, so it keeps going while you're paused or on the map
+setInterval(() => { if (NDNET.live && NDNET.mode !== 'solo') ndSend(ndState()); }, 100);
+function ndRoomStatus(){ const n = NDNET.others.size, r = ndRelaysUp(); ndStatus('In room <b>' + NDNET.code + '</b> (' + r + ' of ' + ND_BROKERS.length + ' relays) · ' + (n ? n + (n > 1 ? ' friends' : ' friend') + ' here · press J to jump to them' : 'waiting for friends: send them the code') + ' · everyone needs this same game file'); }
 async function ndStart(code, host){
   try { await ndLoadLib(); } catch (e) { ndStatus('Couldn\'t load the online part (no internet?). Check your connection and try again.'); return false; }
   NDNET.code = code; NDNET.id = Math.random().toString(36).slice(2, 10); NDNET.mode = host ? 'host' : 'client';
   ndStatus((host ? 'Making room <b>' : 'Joining room <b>') + code + '</b>…');
-  const ok = await ndConnect(0);
-  if (!ok){ NDNET.mode = 'solo'; ndStatus('Couldn\'t reach the online relay. Your internet (or a school/work filter) may be blocking it. Try another network.'); return false; }
+  const ok = await ndConnectAll();
+  if (!ok){ NDNET.mode = 'solo'; ndStatus('Couldn\'t reach any of the online relays. Your internet (or a school/work filter) may be blocking them. Try another network or a phone hotspot.'); return false; }
   ndRoomStatus(); return true;
 }
 function ndHost(){ const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; return ndStart(Array.from({ length: 5 }, () => A[Math.floor(Math.random() * A.length)]).join(''), true); }
 function ndJoin(code){ code = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); if (code.length !== 5){ ndStatus('Room codes have 5 letters.'); return Promise.resolve(false); } return ndStart(code, false); }
 function ndOnData(m){
   if (!m || typeof m !== 'object' || m.id === NDNET.id) return;
+  if (typeof m.q === 'number'){ if (m.q <= (NDNET.lastQ.get(m.id) || 0)) return; NDNET.lastQ.set(m.id, m.q); } // the same message through two relays only counts once
   if (m.v !== ND_VER){ ndStatus('Someone in room <b>' + NDNET.code + '</b> has a different version of the game. Everyone needs the same, newest file.'); return; }
   if (m.t === 'bye'){ if (NDNET.others.has(m.id)){ toast(String(NDNET.others.get(m.id).name) + ' LEFT', 'ROOM ' + NDNET.code, '#8d96ab'); ndDrop(m.id); ndRoomStatus(); } return; }
   if (m.t === 'hi'){ ndSend(ndState()); return; } // a newcomer: tell them where we are straight away
   if (m.t === 's'){ const fresh = !NDNET.others.has(m.id); m.v = m.v2; ndGot(m); if (fresh){ toast(String(m.n) + ' IS IN THE ROOM', 'PRESS J TO JUMP TO THEM', '#3de8ff'); ndRoomStatus(); } }
 }
-function ndLeave(){ if (NDNET.cli){ ndSend({ t: 'bye', v: ND_VER, id: NDNET.id }); try { NDNET.cli.end(); } catch (e) {} } }
+function ndLeave(){ if (NDNET.clis.length){ ndSend({ t: 'bye', v: ND_VER, id: NDNET.id }); for (const c of NDNET.clis) try { c.end(); } catch (e) {} } }
 addEventListener('pagehide', ndLeave);
 // a friend's car: the same car as yours in their paint colour, with a name tag over it
 function ndGot(st){
@@ -64,14 +70,13 @@ function ndGot(st){
 function ndDrop(id){ const o = NDNET.others.get(id); if (!o) return; scene.remove(o.grp); o.grp.traverse(x => { if (x.isSprite){ x.material.map.dispose(); x.material.dispose(); } }); NDNET.others.delete(id); }
 function updateNdNet(dt){
   if (NDNET.mode === 'solo') return;
-  const now = ndNow(); NDNET.sendT -= dt;
-  if (NDNET.sendT <= 0 && NDNET.live){ NDNET.sendT = 1 / 10; ndSend(ndState()); }
+  const now = ndNow();
   for (const [id, o] of NDNET.others){ if (now - o.last > 8){ ndDrop(id); continue; }
     const tR = now - 0.25, B = o.buf; let a = B[0], b = B[B.length - 1]; for (let i = 0; i < B.length - 1; i++) if (B[i].t <= tR && B[i + 1].t >= tR){ a = B[i]; b = B[i + 1]; break; }
     const k = b.t > a.t ? clamp((tR - a.t) / (b.t - a.t), 0, 1.5) : 1; o.grp.position.set(lerp(a.x, b.x, k), lerp(a.y, b.y, k), lerp(a.z, b.z, k)); o.grp.rotation.set(0, a.h + angWrap(b.h - a.h) * k, 0);
     for (const w of o.wheels){ w.spin.rotation.x += b.v / 0.34 * dt; w.pivot.rotation.y = w.front ? clamp((b.st || 0) * 0.45, -0.5, 0.5) : 0; } }
   // the room list in the corner
-  const el = $('ndPlayers'); if (el){ el.hidden = false; el.innerHTML = '<div class="h">ROOM ' + NDNET.code + (NDNET.cli && !NDNET.cli.connected ? ' · RECONNECTING' : '') + '</div>' + [{ n: ndMyName() + ' (YOU)', d: 0 }, ...[...NDNET.others.values()].map(o => ({ n: o.name, d: Math.hypot(o.grp.position.x - car.x, o.grp.position.z - car.z) }))].map(r => `<div class="p"><span>${String(r.n).replace(/[<>&]/g, '')}</span><span>${r.d ? (r.d > 1000 ? (r.d / 1000).toFixed(1) + ' km' : Math.round(r.d) + ' m') : ''}</span></div>`).join(''); }
+  const el = $('ndPlayers'); if (el){ el.hidden = false; el.innerHTML = '<div class="h">ROOM ' + NDNET.code + (NDNET.live && !ndRelaysUp() ? ' · RECONNECTING' : '') + '</div>' + [{ n: ndMyName() + ' (YOU)', d: 0 }, ...[...NDNET.others.values()].map(o => ({ n: o.name, d: Math.hypot(o.grp.position.x - car.x, o.grp.position.z - car.z) }))].map(r => `<div class="p"><span>${String(r.n).replace(/[<>&]/g, '')}</span><span>${r.d ? (r.d > 1000 ? (r.d / 1000).toFixed(1) + ' km' : Math.round(r.d) + ' m') : ''}</span></div>`).join(''); }
 }
 // J: drop in right behind the next friend, on their road, at their speed
 let ndJumpI = 0;
