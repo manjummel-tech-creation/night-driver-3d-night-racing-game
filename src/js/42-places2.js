@@ -224,7 +224,7 @@ function buildSuburb(S){
 // SECRETS: hidden garages and caches at the end of a few of the many dead ends. Nothing marks them on the map
 // until you own the secret map; even then you have to drive there. Each gives a reward once.
 // =====================================================================================================
-const REWARD_TEXT = { 'mod:ROCKET': 'ROCKET BOOSTER · HOLD F FOR A HUGE PUSH', 'mod:AERO': 'ACTIVE AERO KIT · FAR MORE GRIP AT SPEED', 'paint:JUKAI MOSS': 'JUKAI MOSS PAINT', 'paint:CHROME': 'CHROME PAINT', 'paint:MATTE BLACK': 'MATTE BLACK PAINT', 'paint:PEARL GOLD': 'PEARL GOLD PAINT', 'glow:CYAN': 'CYAN UNDERGLOW', 'glow:MAGENTA': 'MAGENTA UNDERGLOW', 'rims:GOLD': 'GOLD RIMS', 'rims:NEON': 'NEON RIMS', 'wing:GT': 'GT WING',
+const REWARD_TEXT = { 'fox:ON': 'KITSUNE-BI · FOX-FIRE', 'mod:ROCKET': 'ROCKET BOOSTER · HOLD F FOR A HUGE PUSH', 'mod:AERO': 'ACTIVE AERO KIT · FAR MORE GRIP AT SPEED', 'paint:JUKAI MOSS': 'JUKAI MOSS PAINT', 'paint:CHROME': 'CHROME PAINT', 'paint:MATTE BLACK': 'MATTE BLACK PAINT', 'paint:PEARL GOLD': 'PEARL GOLD PAINT', 'glow:CYAN': 'CYAN UNDERGLOW', 'glow:MAGENTA': 'MAGENTA UNDERGLOW', 'rims:GOLD': 'GOLD RIMS', 'rims:NEON': 'NEON RIMS', 'wing:GT': 'GT WING',
   'part:engine4': 'LEVEL 4 ENGINE (RACE BUILD)', 'part:tyres4': 'LEVEL 4 TYRES (SLICKS)', 'part:nitro4': 'LEVEL 4 NITRO (TWIN BOTTLES)', 'part:turbo4': 'LEVEL 4 TURBO (TWIN SCROLL)', 'cash:40000': '$40,000 IN A BAG', 'paint:KAGE BLACK': 'KAGE BLACK PAINT', 'glow:AKARI': 'AKARI UNDERGLOW', 'cash:75000': '$75,000 AND A ROCKET' };
 const SECRET_SPOTS = []; // { kind: 'secret' | 'clue', i, x, z, y, grp, F }
 function buildSecretSpot(S, kind, i){

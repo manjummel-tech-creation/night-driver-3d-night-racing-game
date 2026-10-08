@@ -46,6 +46,20 @@ function buildJukai(){
       for (const o of [-6, -11]){ const px = x + F.lx * o, pz = z + F.lz * o; b.add(new THREE.BoxGeometry(2, 0.5, 4), barkM, px, y + 0.8, pz, F.h + Math.PI / 2); for (let k = 0; k < 3; k++){ const g = new THREE.CylinderGeometry(0.35, 0.35, 4.2, 8); g.rotateX(Math.PI / 2); b.add(g, LM(0x6a4a2a), px + F.fx * (k - 1) * 0.7, y + 1.4, pz + F.fz * (k - 1) * 0.7, F.h + Math.PI / 2); } } }
     if (kind === 'jizo'){ const [x, y, z] = at(14, 0); for (let k = 0; k < 7; k++){ const a = k / 7 * TAU, px = x + Math.cos(a) * 4, pz = z + Math.sin(a) * 4, py = shownGround(px, pz); b.add(new THREE.CylinderGeometry(0.3, 0.38, 1, 8), stoneM, px, py + 0.5, pz); b.add(new THREE.SphereGeometry(0.3, 8, 6), stoneM, px, py + 1.22, pz); b.add(new THREE.ConeGeometry(0.42, 0.5, 8), redM, px, py + 0.85, pz); } lantern(x, z, 0.8); }
     JFINDS.push({ kind, name, x: F.x, z: F.z, y: F.y }); });
+  // the fox shrine at the next-furthest dead end: a little red torii, two white foxes, and nine blue fox-fires floating
+  // in a ring. Stop in front of it and the fox-fire follows your car from then on
+  { const E = ends[JFIND_KINDS.length] || ends[ends.length - 1];
+    if (E){ const F = endFrame(E.e, E.node), at = (a, w) => { const [x, z] = F.P(a, w); return [x, shownGround(x, z), z]; }, foxM = LM(0xf2efe6), fireM = new THREE.MeshBasicMaterial({ color: 0x7fd8ff });
+      { const [x, y, z] = at(9, 0); for (const w of [-1.4, 1.4]){ const [px, , pz] = at(9, w); b.add(new THREE.CylinderGeometry(0.14, 0.16, 3, 8), redM, px, y + 1.5, pz); }
+        b.add(new THREE.BoxGeometry(4.0, 0.22, 0.32), redM, x, y + 3.05, z, F.h + Math.PI / 2); b.add(new THREE.BoxGeometry(3.2, 0.14, 0.2), redM, x, y + 2.6, z, F.h + Math.PI / 2); }
+      { const [x, y, z] = at(16, 0); b.add(new THREE.BoxGeometry(2.2, 1.6, 1.8), barkM, x, y + 0.8, z, F.h); b.add(new THREE.ConeGeometry(1.9, 1.0, 4), redM, x, y + 2.1, z, F.h + Math.PI / 4); }
+      for (const w of [-1.6, 1.6]){ const [x, y, z] = at(13, w); b.add(new THREE.BoxGeometry(0.5, 0.5, 0.5), stoneM, x, y + 0.25, z);
+        b.add(new THREE.CylinderGeometry(0.16, 0.24, 0.7, 8), foxM, x, y + 0.85, z); b.add(new THREE.SphereGeometry(0.2, 8, 6), foxM, x, y + 1.32, z);
+        for (const e of [-0.1, 0.1]) b.add(new THREE.ConeGeometry(0.06, 0.2, 4), foxM, x + F.lx * e, y + 1.55, z + F.lz * e);
+        b.add(new THREE.BoxGeometry(0.22, 0.08, 0.06), redM, x, y + 1.08, z, F.h); }
+      { const [cx, cy, cz] = at(12, 0); for (let k = 0; k < 9; k++){ const a = k / 9 * TAU; b.add(new THREE.SphereGeometry(0.22, 8, 6), fireM, cx + Math.cos(a) * 3.6, cy + 2.4 + Math.sin(a * 3) * 0.3, cz + Math.sin(a) * 3.6); }
+        const l = new THREE.PointLight(0x6fc8ff, 2, 30, 2); l.position.set(cx, cy + 3, cz); scene.add(l); }
+      JUKAI_NET.foxSpot = { x: F.x, z: F.z, y: F.y }; } }
   b.flush();
 }
 // fireflies: a little cloud of blinking lights that only lives around you in the forest
@@ -55,6 +69,9 @@ const FIREFLY = (() => { const n = 260, g = new THREE.BufferGeometry(), pos = ne
 let jukaiMsgT = 0, jWasIn = false;
 function updateJukai(dt){
   const jk = weather.jk || 0, J = STATE.jukai, v = Math.hypot(car.vx, car.vy);
+  { const S = JUKAI_NET.foxSpot; if (S && !STATE.unlocked.includes('fox:ON')){ const d = Math.hypot(car.x - S.x, car.z - S.z);
+      if (d < 90 && !S.told){ S.told = true; toast('A FOX SHRINE', 'STOP IN FRONT OF THE TORII', '#7fd8ff'); } else if (d > 160) S.told = false;
+      if (d < 24 && v < 5){ grantReward('fox:ON'); sfx.beep(2200); toast('狐火 · KITSUNE-BI', 'THE FOX-FIRE FOLLOWS YOU NOW · SWITCH IT IN THE GARAGE', '#7fd8ff'); } } }
   // fireflies
   FIREFLY.p.visible = jk > 0.25; if (FIREFLY.p.visible){ FIREFLY.m.opacity = jk * (0.55 + 0.45 * Math.sin(simT * 2.3)) * (1 - DAY.dayF);
     if (Math.hypot(car.x - FIREFLY.cx, car.z - FIREFLY.cz) > 45){ FIREFLY.cx = car.x; FIREFLY.cz = car.z; for (let i = 0; i < FIREFLY.n; i++){ const a = rnd() * TAU, r = 8 + rnd() * 70, x = car.x + Math.cos(a) * r, z = car.z + Math.sin(a) * r; FIREFLY.pos[i * 3] = x; FIREFLY.pos[i * 3 + 1] = shownGround(x, z) + 0.6 + rnd() * 3.5; FIREFLY.pos[i * 3 + 2] = z; } FIREFLY.p.geometry.attributes.position.needsUpdate = true; } }

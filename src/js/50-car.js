@@ -201,7 +201,7 @@ const CAR_MODELS = {
   kaze: { name: 'KAZE 86', kind: 'LIGHT HATCH', desc: 'Tiny, light and twitchy. Slower in a straight line, the king of the mountain drift.', tq: 0.7, m: 1040, cd: 1.12, lat: 4, slide: 0.72, turn: 1.14, trac: 1.1,
     bars: { POWER: 4, 'TOP SPEED': 5, GRIP: 8, DRIFT: 10 }, wx: 0.72, wf: 1.22, wr: -1.2, ws: 0.92, lamp: [0.55, 0.52, 2.12] },
   oni: { name: 'ONI V12', kind: 'WEDGE SUPERCAR', desc: 'Huge power and the fastest on the highway. Heavy, so brake early in the hills.', tq: 1.5, m: 1680, cd: 0.84, lat: -2, slide: 1.15, turn: 0.92, trac: 1.5,
-    bars: { POWER: 10, 'TOP SPEED': 10, GRIP: 6, DRIFT: 5 }, wx: 0.88, wf: 1.45, wr: -1.42, ws: 1.05, lamp: [0.66, 0.5, 2.36] },
+    bars: { POWER: 10, 'TOP SPEED': 10, GRIP: 6, DRIFT: 5 }, wx: 0.8, wf: 1.45, wr: -1.42, ws: 1.05, lamp: [0.6, 0.57, 2.36] },
 };
 const CARV = { k: CAR_MODELS.raijin, id: 'raijin', body: pBody.children.find(o => o.name === 'car-raijin') };
 const carShape = (pts, depth, bevel) => { const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)){ if (p.length === 3) s.absarc(p[0], 0.3, p[2], Math.PI, 0, true); else s.lineTo(p[0], p[1]); }
@@ -231,21 +231,21 @@ const carShape = (pts, depth, bevel) => { const s = new THREE.Shape(); s.moveTo(
 (() => {
   const B = new THREE.Group(); B.name = 'car-oni'; B.visible = false; pBody.add(B);
   const add = (g, m, x, y, z) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); B.add(o); return o; };
-  B.add(new THREE.Mesh(carShape([[-2.3, 0.34], [-1.86, 0.3], [-1.42, 0, 0.44], [1.01, 0.3], [1.45, 0, 0.44], [2.25, 0.3], [2.42, 0.38], [2.36, 0.5], [1.1, 0.76], [-1.9, 0.9], [-2.34, 0.86]], 1.94, 0.06), pPaint));
-  B.add(new THREE.Mesh(carShape([[-1.6, 0.86], [1.15, 0.76], [0.15, 1.13], [-0.65, 1.14], [-1.6, 0.9]], 1.3, 0.06), M_GLASS));
-  add(new THREE.BoxGeometry(0.92, 0.03, 0.78), pPaint, 0, 1.165, -0.26);
-  for (let k = 0; k < 5; k++){ const l = add(new THREE.BoxGeometry(1.1, 0.025, 0.06), pBlack, 0, 0.93 - k * 0.006, -1.72 - k * 0.11); l.rotation.x = -0.05; } // engine-cover louvres
+  B.add(new THREE.Mesh(carShape([[-2.3, 0.34], [-1.86, 0.3], [-1.42, 0, 0.44], [1.01, 0.3], [1.45, 0, 0.44], [2.25, 0.3], [2.42, 0.42], [2.36, 0.58], [1.1, 0.86], [-1.9, 1.0], [-2.34, 0.96]], 1.76, 0.06), pPaint));
+  B.add(new THREE.Mesh(carShape([[-1.6, 0.96], [1.15, 0.86], [0.1, 1.27], [-0.7, 1.28], [-1.6, 1.0]], 1.24, 0.06), M_GLASS));
+  add(new THREE.BoxGeometry(0.9, 0.03, 0.78), pPaint, 0, 1.305, -0.3);
+  for (let k = 0; k < 5; k++){ const l = add(new THREE.BoxGeometry(1.1, 0.025, 0.06), pBlack, 0, 1.03 - k * 0.006, -1.72 - k * 0.11); l.rotation.x = -0.05; } // engine-cover louvres
   for (const x of [-1, 1]){
-    const it = add(new THREE.BoxGeometry(0.06, 0.24, 0.66), pBlack, x * 1.02, 0.66, -0.62); it.rotation.y = x * 0.12;
-    const hl = add(new THREE.BoxGeometry(0.5, 0.04, 0.14), M_HEAD, x * 0.66, 0.5, 2.3); hl.rotation.x = -0.3;
-    add(new THREE.BoxGeometry(0.04, 0.32, 0.12), CARBON, x * 0.55, 1.07, -2.02);
-    add(new THREE.BoxGeometry(0.03, 0.2, 0.5), CARBON, x * 1.0, 1.22, -2.06);
-    add(new THREE.BoxGeometry(0.1, 0.1, 2.3), CARBON, x * 1.0, 0.3, 0.02);
+    const it = add(new THREE.BoxGeometry(0.06, 0.26, 0.66), pBlack, x * 0.93, 0.72, -0.62); it.rotation.y = x * 0.12;
+    const hl = add(new THREE.BoxGeometry(0.46, 0.05, 0.14), M_HEAD, x * 0.6, 0.57, 2.3); hl.rotation.x = -0.3;
+    add(new THREE.BoxGeometry(0.04, 0.34, 0.12), CARBON, x * 0.52, 1.17, -2.02);
+    add(new THREE.BoxGeometry(0.03, 0.2, 0.5), CARBON, x * 0.91, 1.33, -2.06);
+    add(new THREE.BoxGeometry(0.1, 0.1, 2.3), CARBON, x * 0.91, 0.3, 0.02);
   }
-  add(new THREE.BoxGeometry(2.02, 0.05, 0.44), CARBON, 0, 1.25, -2.06);
-  add(new THREE.BoxGeometry(2.0, 0.03, 0.42), CARBON, 0, 0.25, 2.3);
-  add(new THREE.BoxGeometry(1.84, 0.05, 0.04), pTail, 0, 0.8, -2.43);
-  for (const x of [-1, 1]) add(new THREE.BoxGeometry(0.3, 0.1, 0.04), pTail, x * 0.78, 0.74, -2.425);
+  add(new THREE.BoxGeometry(1.84, 0.05, 0.44), CARBON, 0, 1.36, -2.06);
+  add(new THREE.BoxGeometry(1.82, 0.03, 0.42), CARBON, 0, 0.25, 2.3);
+  add(new THREE.BoxGeometry(1.66, 0.05, 0.04), pTail, 0, 0.9, -2.43);
+  for (const x of [-1, 1]) add(new THREE.BoxGeometry(0.3, 0.1, 0.04), pTail, x * 0.7, 0.83, -2.425);
   for (let k = -2; k <= 2; k++) add(new THREE.BoxGeometry(0.02, 0.18, 0.36), CARBON, k * 0.32, 0.32, -2.36);
   const exM = new THREE.MeshStandardMaterial({ color: 0x999999, metalness: 1, roughness: 0.3 });
   for (const x of [-0.3, -0.12, 0.12, 0.3]){ const ex = add(new THREE.CylinderGeometry(0.05, 0.05, 0.16, 10), exM, x, 0.42, -2.42); ex.rotation.x = Math.PI / 2; }

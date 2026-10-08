@@ -114,16 +114,15 @@ function treeSpots(ch, cx, cz){ // deterministic per chunk
   }
   return out;
 }
-function placeTrees(ch, cx, cz){
-  if (!freeBlocks.length) return;
-  const b = freeBlocks.pop(); ch.block = b;
+function placeTrees(ch, cx, cz, far){ // far: out in the mist only every third tree is drawn; the rest fill in as you come closer
+  let b = ch.block; if (b === undefined){ if (!freeBlocks.length) return; b = freeBlocks.pop(); } ch.block = b; ch.treeFar = !!far;
   const spots = treeSpots(ch, cx, cz), dm = new THREE.Object3D();
   ch.trees = []; for (const k of ['pine', 'leaf']) for (const t of spots[k].slice(0, TREE_K)) ch.trees.push(t[0], t[2]); // trunk positions, for driving into the forest
   for (const k of ['pine', 'leaf']){
     const T2 = TREES[k], list = spots[k];
     for (let n = 0; n < TREE_K; n++){
       const slot = b * TREE_K + n;
-      if (n < list.length){ const [x, y, z, sc, ry, cv] = list[n];
+      if (n < list.length && (!far || n % 3 === 0)){ const [x, y, z, sc, ry, cv] = list[n];
         dm.position.set(x, y - 0.3, z); dm.rotation.set(0, ry, 0); dm.scale.set(sc, sc * (0.85 + cv * 0.5), sc); dm.updateMatrix();
         T2.crown.setMatrixAt(slot, dm.matrix); T2.trunk.setMatrixAt(slot, dm.matrix);
         if (list[n][6]) _tc.setRGB(0.025 + cv * 0.02, 0.06 + cv * 0.04, 0.04 + cv * 0.02); else if (k === 'pine') _tc.setRGB(0.05 + cv * 0.03, 0.1 + cv * 0.05, 0.07 + cv * 0.03); else if (ruralK(z) > 0.5) _tc.setRGB(0.1 + cv * 0.05, 0.16 + cv * 0.05, 0.06); else _tc.setRGB(0.09 + cv * 0.04, 0.13 + cv * 0.06, 0.05);
@@ -132,17 +131,30 @@ function placeTrees(ch, cx, cz){
     }
     const top = (Math.max(...[...chunks.values()].map(c2 => c2.block ?? -1), b) + 1) * TREE_K;
     T2.crown.count = T2.trunk.count = top;
-    T2.crown.instanceMatrix.needsUpdate = T2.trunk.instanceMatrix.needsUpdate = true; T2.crown.instanceColor.needsUpdate = true;
+    treeDirty(b);
   }
+}
+// only the blocks that changed go to the graphics card (the whole forest buffer is ~14 MB: sending all of it froze the
+// game for a fifth of a second every time trees appeared, which at speed looked like the car skipping forward)
+const TREE_DIRTY = { lo: Infinity, hi: -1 };
+function treeDirty(b){ TREE_DIRTY.lo = Math.min(TREE_DIRTY.lo, b); TREE_DIRTY.hi = Math.max(TREE_DIRTY.hi, b); }
+function flushTrees(){
+  if (TREE_DIRTY.hi < 0) return; const off = TREE_DIRTY.lo * TREE_K, cnt = (TREE_DIRTY.hi - TREE_DIRTY.lo + 1) * TREE_K;
+  for (const k of ['pine', 'leaf']){ const T2 = TREES[k];
+    for (const a of [T2.crown.instanceMatrix, T2.trunk.instanceMatrix]){ a.updateRange.offset = off * 16; a.updateRange.count = cnt * 16; a.needsUpdate = true; }
+    const c = T2.crown.instanceColor; if (c){ c.updateRange.offset = off * 3; c.updateRange.count = cnt * 3; c.needsUpdate = true; } }
+  TREE_DIRTY.lo = Infinity; TREE_DIRTY.hi = -1;
+  let top = 0; for (const c2 of chunks.values()) if (c2.block !== undefined) top = Math.max(top, c2.block + 1); // draw only up to the last block in use
+  for (const k of ['pine', 'leaf']) TREES[k].crown.count = TREES[k].trunk.count = top * TREE_K;
 }
 function freeTrees(ch){
   if (ch.block === undefined) return;
-  for (const k of ['pine', 'leaf']){ const T2 = TREES[k]; for (let n = 0; n < TREE_K; n++){ const slot = ch.block * TREE_K + n; T2.crown.setMatrixAt(slot, ZERO_M); T2.trunk.setMatrixAt(slot, ZERO_M); } T2.crown.instanceMatrix.needsUpdate = T2.trunk.instanceMatrix.needsUpdate = true; }
-  freeBlocks.push(ch.block); ch.block = undefined; ch.trees = null;
+  for (const k of ['pine', 'leaf']){ const T2 = TREES[k]; for (let n = 0; n < TREE_K; n++){ const slot = ch.block * TREE_K + n; T2.crown.setMatrixAt(slot, ZERO_M); T2.trunk.setMatrixAt(slot, ZERO_M); } }
+  treeDirty(ch.block); freeBlocks.push(ch.block); freeBlocks.sort((a, b) => b - a); ch.block = undefined; ch.trees = null; // lowest blocks get reused first, so no empty slots are drawn
 }
 const TREE_R = 1450;
 // load what's near, drop what's far; at most `budget` new chunks per call
-function updateChunks(px, pz, budget){ const treeR = Math.min(TREE_R - 800 * (weather.jk || 0), 2.4 / Math.max(1e-4, scene.fog.density) + 250); // in the misty sea of trees you can't see far anyway, so trees stop sooner
+function updateChunks(px, pz, budget){ const treeR = Math.min(TREE_R - 800 * (weather.jk || 0), 0.6 * 2.4 / Math.max(1e-4, scene.fog.density) + 100), treeNear = Math.min(650, treeR * 0.55); // in the misty sea of trees you can't see far anyway, so trees stop sooner
 
   const cx0 = Math.floor(px / CH), cz0 = Math.floor(pz / CH), R = Math.ceil(CH_R / CH);
   const want = [];
@@ -152,16 +164,17 @@ function updateChunks(px, pz, budget){ const treeR = Math.min(TREE_R - 800 * (we
     want.push([d, cx, cz]);
   }
   want.sort((a, b) => a[0] - b[0]);
-  let made = 0;
+  let made = 0, treeOps = 0;
   for (const [d, cx, cz] of want){
     const key = cx * 100000 + cz; let ch = chunks.get(key);
     if (!ch){ if (made >= budget) continue; ch = buildChunk(cx, cz); chunks.set(key, ch); made++; }
     ch.seen = true;
-    if (d < treeR && ch.block === undefined && made < budget + 2){ placeTrees(ch, cx, cz); made += 0.5; }
-    else if (d > treeR + 300 && ch.block !== undefined) freeTrees(ch);
+    if (d < treeR && ch.block === undefined && made < budget + 2 && (treeOps < 1 || budget > 50)){ placeTrees(ch, cx, cz, d > treeNear); made += 0.5; treeOps++; } // one block of trees a frame while driving
+    else if (ch.block !== undefined && ch.treeFar && d < treeNear - 50 && (treeOps < 1 || budget > 50)){ placeTrees(ch, cx, cz, false); treeOps++; } // coming closer: fill in the rest
+    else if (d > treeR + 300 && ch.block !== undefined && (treeOps < 1 || budget > 50)){ freeTrees(ch); treeOps++; }
   }
   for (const [key, ch] of chunks){ if (!ch.seen){ freeTrees(ch); scene.remove(ch.mesh); ch.mesh.geometry.dispose(); chunks.delete(key); } ch.seen = false; }
-  return made;
+  flushTrees(); return made;
 }
 // fix the chunk-local height lookup: H has (N + 2) per row where N = CH_N + 1
 function chunkH(ch, i, j){ return ch.H[(j + 1) * (CH_N + 3) + i + 1]; }

@@ -30,8 +30,8 @@ const ownerShown = o => { while (o){ if (!o.visible) return false; o = o.parent;
 function perfTick(dt){
   PERF.t -= dt; if (PERF.t > 0) return; PERF.t = 0.2;
   const cx = camera.position.x, cz = camera.position.z;
-  // how far you can actually see through the mist right now (less than 1% of anything is left beyond this)
-  const see = clamp(2.4 / Math.max(1e-4, scene.fog.density), 260, Math.min(camera.far, CH_R - 150)), seeGlow = camera.far; // never past the edge of the ground that's loaded: nothing hangs in the sky
+  // how far you can actually see through the mist right now (only ~1% of anything is left beyond this)
+  const see = clamp(2.15 / Math.max(1e-4, scene.fog.density), 260, Math.min(camera.far, CH_R - 150)), seeGlow = camera.far; // never past the edge of the ground that's loaded: nothing hangs in the sky
   for (const P of PERF.list){ const d = Math.hypot(P.x - cx, P.z - cz) - P.r, on = d < (P.glow ? seeGlow : see); if (P.grp){ if (P.on !== on){ P.on = on; P.o.traverse(c => c.layers.set(on ? 0 : 1)); } } else P.o.layers.set(on ? 0 : 1); }
   for (const ch of chunks.values()) if (ch.mesh) ch.mesh.layers.set(Math.hypot(ch.x0 + CH / 2 - cx, ch.z0 + CH / 2 - cz) - 283 < see ? 0 : 1); // the ground too
   // hand the shared lights to the nearest feature lights that are switched on

@@ -455,8 +455,8 @@ function updateVisuals(dt, t){
   }
   // street lamps near you light the cars too
   lampT -= dt; if (lampT <= 0){ lampT = 0.1; lampsNear(car.x, car.z, _lamps); _lamps.sort((a, b) => (a.x - car.x) ** 2 + (a.z - car.z) ** 2 - (b.x - car.x) ** 2 - (b.z - car.z) ** 2);
-    lampLights.forEach((L, i) => { const lp = _lamps[i]; if (lp){ L.position.set(lp.x, lp.y - 0.4, lp.z); L.visible = true; } else L.visible = false; }); }
-  for (const L of lampLights) L.intensity = 1.5 * weather.lights * (weather.power < 0.98 && rnd() < 0.15 ? 0.2 : 1);
+    lampLights.forEach((L, i) => { const lp = _lamps[i]; if (lp){ L.position.set(lp.x, lp.y - 0.4, lp.z); L.userData.on = true; } else L.userData.on = false; }); } // spare lights are dimmed, never hidden: hiding one changes the light count and every shader rebuilds (a big stutter)
+  for (const L of lampLights) L.intensity = L.userData.on === false ? 0 : 1.5 * weather.lights * (weather.power < 0.98 && rnd() < 0.15 ? 0.2 : 1);
   { const dv = Math.round(car.damage * 20) / 20; if (dv !== DMGV.level){ DMGV.level = dv; applyDamageVisual(dv); } }
   if (car.damage > 0.45 && rnd() < (car.damage - 0.35) * 0.5){ const fx = Math.sin(car.h), fz = Math.cos(car.h); puff(car.x + fx * 1.7, car.y + 0.95, car.z + fz * 1.7, 0, 0, 0.15 + car.damage * 0.3, 0.6); }
   if (STATION_LIGHT_POS.length){ let bp = STATION_LIGHT_POS[0], bd = Infinity; for (const q of STATION_LIGHT_POS){ const d2 = (q.x - car.x) ** 2 + (q.z - car.z) ** 2; if (d2 < bd){ bd = d2; bp = q; } } STATION_LIGHT.position.set(bp.x, bp.y + 4.4, bp.z); }
@@ -537,6 +537,7 @@ function frame(now){
   if (started) requestAnimationFrame(frame); else setTimeout(() => requestAnimationFrame(frame), 33); // the menu's slow turn round the car doesn't need 60 fps
   const rawDt = (now - last) / 1000; let dt = Math.min(0.05, rawDt); last = now;
   watchQuality(rawDt);
+  if (!SHADERS_WARM) warmShaders();
   stepGame(dt);
   if (composer && quality.bloom) composer.render(); else renderer.render(scene, camera);
   drawMirror();
@@ -571,12 +572,13 @@ function stepGame(dt){
   if (car.sup && car.sup.e){ car.lastE = car.sup.e; car.lastS = clamp(car.sup.s, 0, car.sup.e.len); const r = edgeAt(car.lastE, car.lastS, _ra); car.lastDir = car.lastE.oneway ? 1 : (Math.cos(angWrap(car.h - r.h)) >= 0 ? 1 : -1); }
   updateTraffic(dt);
   if (started){ updatePolice(dt); copBumps(); updateSpikes(dt); updateSecrets(dt, simT); updateLore(dt); updateHeist(dt); updateJukai(dt); }
+  updateFox(dt);
   updateNdNet(dt);
   updateHeli(dt, simT); updateBoom(dt);
   if (started){ scoring(dt); stations(dt); updateGps(dt); updateGpsLine(dt); }
   updateVisuals(dt, simT); updateCockpit(dt); perfTick(dt);
   drawTraffic(simT); drawPolice(dt, simT);
-  updateChunks(car.x, car.z, 1);
+  updateChunks(car.x, car.z, 1); preloadTextures();
   for (const p of NearPool.all) p.update(car.x, car.z);
   if (started) updateCamera(dt);
   else { const a = simT * 0.15 + car.h + 2.4, R = 7.5; camera.position.set(car.x + Math.sin(a) * R, car.y + 2.2, car.z + Math.cos(a) * R); camera.lookAt(car.x, car.y + 0.7, car.z); sky.position.copy(camera.position); stars.position.copy(camera.position); }
@@ -627,6 +629,29 @@ try { VM.on = localStorage.getItem('nd-vmir') !== '0'; } catch (e) {}
 VM.cam.position.set(0, 1.6, -1.0); player.add(VM.cam); VM.rt.texture.wrapS = THREE.RepeatWrapping; VM.rt.texture.repeat.x = -1; VM.rt.texture.offset.x = 1;
 VM.scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: VM.rt.texture, depthTest: false })));
 addEventListener('keydown', e => { if (e.code === 'KeyB' && !e.repeat && started && !(e.target && e.target.tagName === 'INPUT')){ VM.on = !VM.on; try { localStorage.setItem('nd-vmir', VM.on ? '1' : '0'); } catch (er) {} toast(VM.on ? 'MIRROR ON' : 'MIRROR OFF', 'B', '#9fd6ff'); } });
+// compile every shader up front (for the screen and for the mirror strip, which needs its own versions), with hidden
+// things shown for a moment, so nothing has to be compiled mid-drive: that froze the game for 0.1-0.2 s the first time
+// a new kind of object came into view, which at speed looked like skipping forward
+let SHADERS_WARM = false;
+function warmShaders(){
+  SHADERS_WARM = true; const hid = [];
+  const hasLight = o => { let f = false; o.traverse(c => { if (c.isLight) f = true; }); return f; };
+  scene.traverse(o => { if (!o.visible && !hasLight(o)){ hid.push(o); o.visible = true; } }); // (never lights: the light count must stay the same)
+  try { renderer.compile(scene, camera); const keep = renderer.getRenderTarget(); renderer.setRenderTarget(VM.rt); renderer.compile(scene, VM.cam); renderer.setRenderTarget(keep); } catch (e) {}
+  for (const o of hid) o.visible = false;
+  // and list every picture (signs, posters...) with where it stands, so it can be sent to the graphics card before you
+  // get there, a few a frame, instead of dozens in the one frame a town comes into view
+  const seen = new Set(), wp = new THREE.Vector3();
+  scene.traverse(o => { if (!o.material) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) for (const k of ['map', 'emissiveMap', 'alphaMap']){ const t = m[k]; if (!t || seen.has(t) || !t.image) continue; seen.add(t);
+    if (o.isInstancedMesh || o === player || (o.geometry && o.geometry.boundingSphere && o.geometry.boundingSphere.radius > 3000)){ TEXQ.near.push(t); continue; } o.getWorldPosition(wp); TEXQ.list.push({ t, x: wp.x, z: wp.z }); } });
+}
+const TEXQ = { list: [], near: [] };
+function preloadTextures(){
+  if (!SHADERS_WARM) return; let n = 0;
+  while (TEXQ.near.length && n < 3){ const t = TEXQ.near.pop(); try { renderer.initTexture(t); } catch (e) {} n++; }
+  for (let i = TEXQ.list.length - 1; i >= 0 && n < 3; i--){ const q = TEXQ.list[i]; if ((q.x - car.x) ** 2 + (q.z - car.z) ** 2 > 2000 * 2000) continue;
+    try { renderer.initTexture(q.t); } catch (e) {} TEXQ.list[i] = TEXQ.list[TEXQ.list.length - 1]; TEXQ.list.pop(); n++; }
+}
 function drawMirror(){ const el = $('vmir'), show = VM.on && started && !paused; if (el.hidden === show) el.hidden = !show; if (!show) return;
   const b = el.getBoundingClientRect(); if (b.width < 10) return;
   if ((VM.n++ & 1) === 0){ VM.cam.updateMatrixWorld(); const keep = renderer.getRenderTarget(); renderer.setRenderTarget(VM.rt); renderer.render(scene, VM.cam); renderer.setRenderTarget(keep); } // the view behind is redrawn every other frame
