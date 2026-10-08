@@ -26,6 +26,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:var(--night);color:var
 .score .big{font-family:var(--f-num);font-size:32px;line-height:.9;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:.02em;color:var(--money)}
 .stars{font-size:15px;letter-spacing:.12em;color:#ffd23d;margin-top:3px;text-shadow:0 0 8px rgba(255,200,60,.4)}
 .cockpit .dash{display:none}
+.savebar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 14px}.savebar select{background:rgba(255,255,255,.06);color:var(--ink,#fff);border:1px solid var(--line);border-radius:4px;padding:6px 8px;font:inherit;font-size:12px;letter-spacing:.06em}.savebar .sep{flex:0 0 6px}.btn.sm{padding:6px 10px;font-size:11px;min-height:32px}.savehint{flex-basis:100%;margin:2px 0 0;font-size:11px;color:var(--dim);letter-spacing:.04em}
 .stars.zero{color:rgba(255,255,255,.22);text-shadow:none}
 .wantinfo{font-size:9px;letter-spacing:.12em;color:#ffd23d;opacity:.8;min-height:0}.wantinfo:empty{display:none}.wantinfo.hot{color:#ff6a7a;opacity:1}
 #mult{font-family:var(--f-num);font-size:18px;line-height:1;color:var(--sodium);font-variant-numeric:tabular-nums}
@@ -98,6 +99,7 @@ body.touch .nitro{bottom:calc(376px + env(safe-area-inset-bottom,0px))}
 /* overlays */
 .overlay{position:fixed;inset:0;display:grid;place-items:center;padding:16px;background:radial-gradient(120% 90% at 50% 100%,rgba(255,150,60,.10),rgba(5,7,13,.25) 45%,rgba(5,7,13,.82))}
 .card{width:min(580px,100%);max-height:calc(100% - 32px);overflow:auto;padding:28px 28px 24px;background:rgba(7,9,16,.88);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(10px);box-sizing:border-box}
+.vmir{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(30vw,440px);aspect-ratio:4.2/1;border:3px solid #0b0c10;border-radius:6px;box-shadow:0 3px 14px rgba(0,0,0,.5);z-index:6;pointer-events:none}
 .card h1{margin:0;font-family:var(--f-num);font-weight:500;font-size:84px;line-height:.82;letter-spacing:.02em}
 .card h1 em{font-style:normal;color:var(--sodium)}
 .tag{margin:10px 0 20px;color:var(--dim);font-size:14px;line-height:1.55;max-width:50ch}
@@ -194,6 +196,7 @@ body.touch .dash{transform:scale(.62);transform-origin:right bottom;right:8px;bo
 </head>
 <body>
 <div id="stage"></div>
+<div class="vmir" id="vmir" hidden aria-hidden="true"></div>
 <canvas id="rainfx"></canvas>
 
 <div id="hud" hidden>
@@ -211,10 +214,7 @@ body.touch .dash{transform:scale(.62);transform-origin:right bottom;right:8px;bo
   <div class="traf" aria-label="Traffic ahead"><canvas id="trafBar" width="12" height="240"></canvas><canvas id="trafIcons" width="48" height="440"></canvas><span>AHEAD</span></div>
   <button id="muteBtn" class="mute" type="button">SOUND ON</button>
   <button id="helpBtn" class="mute sidebtn" style="top:calc(44px + env(safe-area-inset-top,0px))" type="button">CONTROLS  /</button>
-  <button id="fogBtn" class="mute sidebtn" style="top:calc(76px + env(safe-area-inset-top,0px))" type="button">FOG  K</button>
-  <button id="boBtn" class="mute sidebtn" style="top:calc(108px + env(safe-area-inset-top,0px))" type="button">BLACKOUT  B</button>
-  <button id="rainBtn" class="mute sidebtn" style="top:calc(140px + env(safe-area-inset-top,0px))" type="button">RAIN  O</button>
-  <button id="radioBtn" class="mute sidebtn" style="top:calc(172px + env(safe-area-inset-top,0px))" type="button">RADIO  Y</button>
+  <button id="radioBtn" class="mute sidebtn" style="top:calc(76px + env(safe-area-inset-top,0px))" type="button">RADIO  Y</button>
   <div class="road"><div id="roadName" class="rn"></div><div id="gpsLine" class="gps" hidden></div></div>
   <div id="popups"></div>
   <div id="toast"></div>
@@ -244,6 +244,17 @@ body.touch .dash{transform:scale(.62);transform-origin:right bottom;right:8px;bo
     <h1>Night <em>Driver</em></h1>
     <p class="tag">Fifty kilometres of night, from the snowy peaks of Hakone in the south to the farms around Hokuto in the north. Four expressways meet at stacked interchanges; mountain passes, lake roads and farm lanes link five cities. Weave through traffic for cash, keep your tank full, spend your money in the cities' tune shops and the far-off towns that sell the rare parts, and keep an eye on your mirrors: if the police see you, they come after you.</p>
     <p id="saveLine" class="save-line"></p>
+    <div class="savebar">
+      <label class="lbl" for="playerSel">Player</label><select id="playerSel" aria-label="Choose the player"></select>
+      <button class="btn ghost sm" id="newPlayer" type="button">+ NEW PLAYER</button>
+      <span class="sep"></span>
+      <button class="btn ghost sm" id="expFile" type="button">SAVE TO FILE</button>
+      <button class="btn ghost sm" id="expCode" type="button">COPY SAVE CODE</button>
+      <button class="btn ghost sm" id="impFile" type="button">LOAD FILE</button>
+      <button class="btn ghost sm" id="impCode" type="button">PASTE CODE</button>
+      <input type="file" id="impInput" accept=".json,application/json,text/plain" hidden>
+      <p class="savehint" id="saveHint">Your progress saves itself on this device. To play it somewhere else, save it to a file or copy the code, then load it on the other device.</p>
+    </div>
     <div class="row">
       <div class="field"><span class="lbl">Paint</span><div class="swatches" id="paints"></div></div>
       <div class="field"><span class="lbl">Garage</span><div class="chips" id="cosm"></div></div>
@@ -393,7 +404,7 @@ const CLS = {
   st: { key: 'st', lanes: 2, LW: 3.4, hw: 7.7, med: 0.3, oneway: false, lim: 70, rank: 0, step: 4, rail: false },
   al: { key: 'al', lanes: 1, LW: 3.0, hw: 3.7, med: 0.1, oneway: false, lim: 40, rank: 0, step: 3, rail: false },
   ln: { key: 'ln', lanes: 1, LW: 3.1, hw: 3.9, med: 0.1, oneway: false, lim: 60, rank: 1, step: 4, rail: false },
-  mt: { key: 'mt', lanes: 1, LW: 3.2, hw: 4.2, med: 0.1, oneway: false, lim: 50, rank: 1, step: 3, rail: true },
+  mt: { key: 'mt', lanes: 1, LW: 3.6, hw: 4.9, med: 0.1, oneway: false, lim: 50, rank: 1, step: 3, rail: true }, // wide enough to hold a slide
   dt: { key: 'dt', lanes: 1, LW: 3.0, hw: 3.6, med: 0, oneway: false, lim: 60, rank: 1, step: 4, rail: false },
   rw: { key: 'rw', lanes: 1, LW: 12, hw: 22, med: 0, oneway: false, lim: 300, rank: 1, step: 8, rail: false },
 };
@@ -1015,6 +1026,23 @@ for (const H of HILLS){
     const L = 140 + 20 * v.sides.length; const e = addRoad(atNode(V, Math.cos(a), Math.sin(a)), endNew(V.x + Math.cos(a) * L, V.z + Math.sin(a) * L, -Math.cos(a), -Math.sin(a), 'e'), 'al', { name: H.name + ' LANE', wig: 25, handle: 20, Rmin: 15, tries: 3, gen: 'village' }); if (e){ e.ang = a; v.sides.push(e); } }
 }
 // ---------- dead ends: farm tracks, logging roads and forgotten spurs, so the secret places can't be found by trying every road
+// ---------- MIDNIGHT DRIFT ROAD: a mountain road built for sliding. It crosses a quiet hillside between two roads as one
+// long chain of linked bends, each about 45 m round and flowing straight into the next, wide, railed, and double points
+const DRIFT = { edge: null };
+{ const clearAt = (x, z, R) => !nearestOn(x, z, R) && x > WB.x0 + 600 && x < WB.x1 - 600 && z > WB.z0 + 600 && z < WB.z1 - 600;
+  for (let t = 0; t < 600 && !DRIFT.edge; t++){
+    const cx = lerp(WB.x0 + 2500, WB.x1 - 2500, hash2(t, 91)), cz = lerp(6000, WB.z1 - 2500, hash2(t, 92)); if (mtnK(cx, cz) < 0.35 || !clearAt(cx, cz, 650)) continue;
+    const A = attachSpec(cx, cz, 2600, e => ATTACHABLE(e) && e.gen !== 'dead' && e.gen !== 'jukai'); if (!A || A.dist < 700) continue;
+    const ux = (cx - A.x) / A.dist, uz = (cz - A.z) / A.dist, tx = A.x + ux * A.dist * 2, tz = A.z + uz * A.dist * 2;
+    const B = attachSpec(tx, tz, 1400, e => ATTACHABLE(e) && e.gen !== 'dead' && e.gen !== 'jukai' && e !== A.e); if (!B) continue;
+    const L = Math.hypot(B.x - A.x, B.z - A.z); if (L < 1600 || L > 4800) continue;
+    const dx = (B.x - A.x) / L, dz = (B.z - A.z) / L, px = -dz, pz = dx, lam = 360, amp = 78, pts = []; let ok = true;
+    for (let d = 160; d < L - 160; d += 22){ const ramp = smooth(160, 420, d) * smooth(160, 420, L - d), w = amp * ramp * Math.sin((d - 160) / lam * TAU), x = A.x + dx * d + px * w, z = A.z + dz * d + pz * w;
+      if (!clearAt(x, z, 75)){ ok = false; break; } pts.push([x, z]); }
+    if (!ok) continue;
+    const e = addRoad(endAttach(A, pts[0][0], pts[0][1]), endAttach(B, pts[pts.length - 1][0], pts[pts.length - 1][1]), 'mt', { name: 'MIDNIGHT DRIFT ROAD', points: pts, gen: 'drift', towardsB: 'DRIFT ROAD', towardsA: 'DRIFT ROAD' });
+    if (e){ e.drift = true; DRIFT.edge = e; } }
+  if (!DRIFT.edge) wwarn('no room for the drift road'); }
 const DEAD_ENDS = [];
 { const R = mulberry(777);
   for (let tries = 0; tries < 4000 && DEAD_ENDS.length < 92; tries++){
@@ -3661,139 +3689,213 @@ function manualShift(dir){
   car.shiftT = 0.12; sfx.shift();
 }
 // =====================================================================================================
-// THE COCKPIT: the view from the driver's seat (camera mode COCKPIT). A dark interior with red ambient strips, two round
-// dials and a digital speed readout, a centre screen, a steering wheel that turns like a real one (with your gloved
-// hands on it), and a windscreen that gathers rain until the wipers sweep it clear. Everything hangs off pBody, so the
-// interior pitches and rolls with the car.
+// THE COCKPIT: the view from the driver's seat (camera mode COCKPIT), left-hand drive, and a little bit from the future.
+// Textured leather, carbon fibre, Alcantara and brushed metal; cyan and violet light running along the dash, doors,
+// console and footwells; a glowing digital cluster with shift lights on the wheel; a screen set into the centre stack.
+// Real glass in the windows, wipers that sweep the rain off, and side and rear-view mirrors that show what's behind.
+// Your gloved hands hold the wheel; the right one goes to the gear lever on every shift. Shared by Night Driver and
+// Night Highway: it needs pBody, car, opts, weather, DAY, pPaint, STRIPE, renderer, scene, sfx, canvasTex and started.
 // =====================================================================================================
+var CP_drawScreen = () => {}, CP_hang = null;
 const CP = (() => {
   const g = new THREE.Group(); g.visible = false; pBody.add(g);
-  const IM = (c, e = 0x050507) => new THREE.MeshLambertMaterial({ color: c, emissive: e });
-  const dark = IM(0x16171c, 0x060709), dash = IM(0x101116, 0x040406), leather = IM(0x1c1c22, 0x070709), trim = new THREE.MeshStandardMaterial({ color: 0x2a2c33, metalness: 0.7, roughness: 0.35, emissive: 0x08090b });
-  const red = new THREE.MeshBasicMaterial({ color: 0xff2a3a }), blue = new THREE.MeshBasicMaterial({ color: 0x3aa8ff });
+  // ---------- textures, drawn once
+  const tex = (w, h, draw, rx = 1, ry = 1) => { const t = canvasTex(w, h, draw); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); return t; };
+  const noise = (c, w, h, base, amp, n) => { c.fillStyle = base; c.fillRect(0, 0, w, h); for (let k = 0; k < n; k++){ const v = Math.random() * amp | 0; c.fillStyle = `rgba(${v},${v},${v + 4},0.18)`; c.fillRect(Math.random() * w, Math.random() * h, 2, 2); } };
+  const leatherT = tex(256, 256, (c) => { noise(c, 256, 256, '#26262c', 90, 9000); for (let k = 0; k < 400; k++){ c.strokeStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.arc(Math.random() * 256, Math.random() * 256, 2 + Math.random() * 3, 0, TAU); c.stroke(); } }, 4, 4);
+  const alcT = tex(256, 256, (c) => noise(c, 256, 256, '#1e1f25', 70, 16000), 6, 6);
+  const carbonT = tex(64, 64, (c) => { for (let y = 0; y < 64; y += 8) for (let x = 0; x < 64; x += 8){ const on = ((x + y) / 8) % 2, gr = c.createLinearGradient(x, y, x + 8, y + 8); gr.addColorStop(0, on ? '#2c2f36' : '#131418'); gr.addColorStop(1, on ? '#17181d' : '#24262c'); c.fillStyle = gr; c.fillRect(x, y, 8, 8); } }, 8, 8);
+  const brushT = tex(256, 64, (c) => { c.fillStyle = '#6d727c'; c.fillRect(0, 0, 256, 64); for (let k = 0; k < 600; k++){ const v = 80 + Math.random() * 90 | 0; c.strokeStyle = `rgba(${v},${v},${v + 6},0.35)`; c.beginPath(); const y = Math.random() * 64; c.moveTo(0, y); c.lineTo(256, y + Math.random() - 0.5); c.stroke(); } }, 2, 1);
+  const LT = (map, c, e) => new THREE.MeshLambertMaterial({ map, color: c, emissive: e });
+  const dashM = LT(leatherT, 0xffffff, 0x0b0b10), softM = LT(alcT, 0xffffff, 0x0a0a0e), leather = LT(leatherT, 0xd8d8e0, 0x0a0a0d), carbon = LT(carbonT, 0xffffff, 0x0c0d11), roofM = LT(alcT, 0xb0b0b8, 0x07070a), carpet = LT(alcT, 0x707078, 0x040405);
+  const brushed = new THREE.MeshStandardMaterial({ map: brushT, metalness: 0.85, roughness: 0.35, emissive: 0x16181c }), chrome = new THREE.MeshStandardMaterial({ color: 0xc9d0d8, metalness: 1, roughness: 0.15, emissive: 0x1a1c20 });
+  // ---------- light: two colours that run through the whole cabin
+  const CY = 0x3de8ff, VI = 0xa55bff, glowC = new THREE.MeshBasicMaterial({ color: CY }), glowV = new THREE.MeshBasicMaterial({ color: VI }), ledW = new THREE.MeshBasicMaterial({ color: 0xe8f4ff });
+  const haze = (col, op) => new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+  const suit = new THREE.MeshLambertMaterial({ map: alcT, color: 0xd8dae0, emissive: 0x141418 }), glove = new THREE.MeshLambertMaterial({ map: leatherT, color: 0xffffff, emissive: 0x3a3c40 }), gloveDark = LT(carbonT, 0xffffff, 0x0e0e12);
   const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0, parent = g) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); parent.add(o); return o; };
-  const EYE = new THREE.Vector3(0.36, 1.16, -0.52); // driver's eyes: left-hand drive
-  // dashboard: a long dark slab under the windscreen, the hood over the dials, door cards and a centre console
-  add(new THREE.BoxGeometry(1.72, 0.24, 0.62), dash, 0, 0.8, 0.5);
-  add(new THREE.BoxGeometry(1.72, 0.06, 0.34), dark, 0, 0.93, 0.62, -0.25);
-  add(new THREE.BoxGeometry(0.52, 0.025, 0.2), dash, 0.36, 0.955, 0.24, 0.18, 0, 0); for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.025, 0.12, 0.2), dash, 0.36 + s * 0.25, 0.9, 0.24); // the hood over the dials
-  add(new THREE.BoxGeometry(0.5, 0.02, 0.012), red, 0, 0.885, 0.2); add(new THREE.BoxGeometry(1.6, 0.012, 0.012), red, 0, 0.765, 0.19); // ambient strips
-  for (const s of [-1, 1]){ add(new THREE.BoxGeometry(0.06, 0.5, 1.7), leather, s * 0.8, 0.68, -0.25); add(new THREE.BoxGeometry(0.012, 0.012, 1.4), red, s * 0.765, 0.86, -0.25); add(new THREE.BoxGeometry(0.1, 0.05, 0.9), trim, s * 0.75, 0.93, -0.3); }
-  add(new THREE.BoxGeometry(0.26, 0.3, 1.0), dark, 0, 0.55, -0.2); add(new THREE.BoxGeometry(0.06, 0.08, 0.12), trim, 0, 0.73, -0.25);
-  // the bonnet ahead of you (the outside body is hidden in this view), and the floor
-  { const s = new THREE.Shape(); s.moveTo(-0.86, 0); s.lineTo(-0.8, -1.35); s.quadraticCurveTo(0, -1.45, 0.8, -1.35); s.lineTo(0.86, 0); s.lineTo(-0.86, 0);
-    const bg = new THREE.ShapeGeometry(s, 8); add(bg, pPaint, 0, 0.93, 0.86, -Math.PI / 2 + 0.12, 0, 0); }
-  add(new THREE.BoxGeometry(1.6, 0.04, 2.2), dark, 0, 0.3, -0.3);
-  for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.04, 0.42, 1.9), leather, s * 0.86, 0.5, -0.35);
-  // pillars, roof lining and the mirror
-  const pillar = (s) => { const a = new THREE.Vector3(s * 0.7, 0.9, 0.86), b = new THREE.Vector3(s * 0.6, 1.3, -0.2), m = add(new THREE.CylinderGeometry(0.045, 0.06, 1, 8), dark, 0, 0, 0); m.position.copy(a).add(b).multiplyScalar(0.5); m.scale.y = a.distanceTo(b); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); };
-  pillar(-1); pillar(1);
-  add(new THREE.BoxGeometry(1.4, 0.03, 1.3), IM(0x2a2b30, 0x0b0b0d), 0, 1.3, -0.82);
-  add(new THREE.BoxGeometry(1.36, 0.03, 0.08), dark, 0, 1.315, -0.19);
-  add(new THREE.BoxGeometry(0.22, 0.065, 0.02), new THREE.MeshBasicMaterial({ color: 0x0d1118 }), 0, 1.2, -0.12); add(new THREE.BoxGeometry(0.04, 0.06, 0.04), dark, 0, 1.25, -0.13);
-  // side mirrors, outside the front corners of the side windows
-  for (const s of [-1, 1]){ add(new THREE.BoxGeometry(0.2, 0.12, 0.08), pPaint, s * 0.98, 0.97, 0.55); add(new THREE.PlaneGeometry(0.17, 0.09), new THREE.MeshBasicMaterial({ color: 0x141a24 }), s * 0.98, 0.97, 0.505, 0, Math.PI, 0); }
-  // instruments: a canvas redrawn a few times a second
-  const gc = document.createElement('canvas'); gc.width = 1024; gc.height = 320; const gx = gc.getContext('2d'), gTex = new THREE.CanvasTexture(gc);
-  const gauge = add(new THREE.PlaneGeometry(0.44, 0.1375), new THREE.MeshBasicMaterial({ map: gTex }), 0.36, 0.87, 0.175, -0.32, Math.PI, 0);
-  gauge.rotation.order = 'YXZ'; gauge.rotation.set(-0.3, Math.PI, 0);
+  const between = (geo, m, a, b, parent = g) => { const o = new THREE.Mesh(geo, m); o.position.copy(a).add(b).multiplyScalar(0.5); o.scale.y = a.distanceTo(b); o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); parent.add(o); return o; };
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const EYE = V(0.38, 1.2, -0.78), W = 0.93; // eyes a little further back and up; the cabin's half-width
+  const across = (pts, width, m, x0 = 0, bevel = 0.012) => { const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++){ const p = pts[i]; if (p.length === 4) s.quadraticCurveTo(p[0], p[1], p[2], p[3]); else s.lineTo(p[0], p[1]); }
+    const geo = new THREE.ExtrudeGeometry(s, { depth: width, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 10 }); geo.translate(0, 0, -width / 2); geo.rotateY(-Math.PI / 2); return add(geo, m, x0, 0, 0); };
+  // ---------- dashboard: a sculpted leather top, a carbon fibre band and a glowing lip that runs door to door
+  across([[0.9, 0.9], [0.86, 0.945], [0.5, 0.965, 0.3, 0.95], [0.18, 0.945, 0.15, 0.9], [0.17, 0.82], [0.2, 0.62], [0.7, 0.6], [0.9, 0.9]], W * 2 - 0.04, dashM);
+  add(new THREE.BoxGeometry(W * 2 - 0.1, 0.05, 0.012), carbon, 0, 0.87, 0.162);
+  add(new THREE.BoxGeometry(W * 2 - 0.1, 0.006, 0.006), glowC, 0, 0.84, 0.158); add(new THREE.BoxGeometry(W * 2 - 0.1, 0.004, 0.004), glowV, 0, 0.928, 0.166);
+  add(new THREE.PlaneGeometry(W * 2 - 0.2, 0.25), haze(CY, 0.05), 0, 0.72, 0.15, 0, Math.PI, 0); // light spilling down from the strip
+  // the cluster: a glowing display seen through the top of the wheel, in a slim bezel (no hood: from the seat it looked like part of the rim)
+  const gc = document.createElement('canvas'); gc.width = 1024; gc.height = 400; const gx = gc.getContext('2d'), gTex = new THREE.CanvasTexture(gc);
+  add(new THREE.BoxGeometry(0.47, 0.19, 0.04), new THREE.MeshBasicMaterial({ color: 0x020306 }), EYE.x, 0.905, 0.174).rotation.set(-0.22, Math.PI, 0, 'YXZ');
+  const gauge = add(new THREE.PlaneGeometry(0.44, 0.172), new THREE.MeshBasicMaterial({ map: gTex }), EYE.x, 0.905, 0.15); gauge.rotation.set(-0.22, Math.PI, 0, 'YXZ');
+  const SOFF = new THREE.MeshBasicMaterial({ color: 0x14161c }), SG = new THREE.MeshBasicMaterial({ color: CY }), SV = new THREE.MeshBasicMaterial({ color: VI }), SR = new THREE.MeshBasicMaterial({ color: 0xff3d6e }), LIM = new THREE.MeshBasicMaterial({ color: 0xffffff }), SHIFT = [];
   function drawGauges(){
-    const g2 = gx, W = 1024, H = 320, kmh = Math.abs(car.vx) * 3.6, rpm = car.rpm || 900;
-    g2.fillStyle = '#05060a'; g2.fillRect(0, 0, W, H);
-    const dial = (cx, val, max, ticks, label, red0) => { const R = 128, a0 = Math.PI * 0.75, a1 = Math.PI * 2.25, a = a0 + (a1 - a0) * clamp(val / max, 0, 1);
-      g2.lineWidth = 6; g2.strokeStyle = '#123a66'; g2.beginPath(); g2.arc(cx, 165, R, a0, a1); g2.stroke();
-      g2.strokeStyle = '#3aa8ff'; g2.shadowColor = '#3aa8ff'; g2.shadowBlur = 14; g2.beginPath(); g2.arc(cx, 165, R, a0, a); g2.stroke(); g2.shadowBlur = 0;
-      if (red0){ g2.strokeStyle = '#ff2a3a'; g2.beginPath(); g2.arc(cx, 165, R, a0 + (a1 - a0) * red0, a1); g2.stroke(); }
-      g2.fillStyle = '#cfe4ff'; g2.font = '600 20px "Chakra Petch", sans-serif'; g2.textAlign = 'center'; g2.textBaseline = 'middle';
-      for (let k = 0; k <= ticks; k++){ const t = a0 + (a1 - a0) * k / ticks; g2.fillText(String(Math.round(max / ticks * k / (max > 100 ? 1 : 1000))), cx + Math.cos(t) * (R - 30), 165 + Math.sin(t) * (R - 30)); }
-      g2.strokeStyle = '#ff3b3b'; g2.lineWidth = 5; g2.beginPath(); g2.moveTo(cx, 165); g2.lineTo(cx + Math.cos(a) * (R - 12), 165 + Math.sin(a) * (R - 12)); g2.stroke();
-      g2.fillStyle = '#1a1c22'; g2.beginPath(); g2.arc(cx, 165, 16, 0, TAU); g2.fill();
-      g2.fillStyle = '#7f93ad'; g2.font = '600 16px "Chakra Petch", sans-serif'; g2.fillText(label, cx, 245); };
-    dial(200, kmh, 320, 8, 'km/h', 0); dial(824, rpm, 8000, 8, 'x1000 rpm', 0.84);
-    g2.textAlign = 'center'; g2.fillStyle = '#ffffff'; g2.font = '700 76px "Chakra Petch", sans-serif'; g2.fillText(String(Math.round(kmh)), 512, 140);
-    g2.fillStyle = '#7f93ad'; g2.font = '600 20px "Chakra Petch", sans-serif'; g2.fillText('km/h', 512, 190);
-    g2.fillStyle = '#3aa8ff'; g2.font = '800 40px "Chakra Petch", sans-serif'; g2.fillText(car.gear < 0 ? 'R' : (opts.auto ? 'D' : 'M') + car.gear, 512, 245);
-    g2.fillStyle = '#20232b'; g2.fillRect(432, 278, 160, 8); g2.fillStyle = car.fuel < 0.2 ? '#ff4058' : '#e8edf5'; g2.fillRect(432, 278, 160 * car.fuel, 8);
-    if (weather.rain > 0.25){ g2.fillStyle = '#3aa8ff'; g2.font = '700 18px "Chakra Petch", sans-serif'; g2.fillText('WIPERS', 512, 40); }
+    const c = gx, kmh = Math.abs(car.vx) * 3.6, rpm = car.rpm || 900, rk = clamp((rpm - 800) / 7000, 0, 1);
+    c.fillStyle = '#020309'; c.fillRect(0, 0, 1024, 400);
+    c.strokeStyle = 'rgba(61,232,255,0.07)'; c.lineWidth = 1; for (let x = 0; x < 1024; x += 32){ c.beginPath(); c.moveTo(x, 0); c.lineTo(x, 400); c.stroke(); } for (let y = 0; y < 400; y += 32){ c.beginPath(); c.moveTo(0, y); c.lineTo(1024, y); c.stroke(); }
+    // the rev arc: a wide glowing sweep, cyan to violet to red near the limiter
+    const a0 = Math.PI * 0.8, a1 = Math.PI * 2.2, cx = 512, cy = 250, R = 210;
+    c.lineCap = 'round'; c.lineWidth = 18; c.strokeStyle = 'rgba(255,255,255,0.06)'; c.beginPath(); c.arc(cx, cy, R, a0, a1); c.stroke();
+    const gr = c.createLinearGradient(cx - R, 0, cx + R, 0); gr.addColorStop(0, '#3de8ff'); gr.addColorStop(0.7, '#a55bff'); gr.addColorStop(1, '#ff3d6e');
+    c.strokeStyle = gr; c.shadowColor = rk > 0.85 ? '#ff3d6e' : '#3de8ff'; c.shadowBlur = 24; c.beginPath(); c.arc(cx, cy, R, a0, a0 + (a1 - a0) * rk + 0.001); c.stroke(); c.shadowBlur = 0;
+    c.fillStyle = 'rgba(200,230,255,0.75)'; c.font = '600 20px "Chakra Petch", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    for (let k = 0; k <= 8; k++){ const t = a0 + (a1 - a0) * k / 8; c.fillText(String(k), cx + Math.cos(t) * (R - 38), cy + Math.sin(t) * (R - 38)); }
+    c.fillStyle = '#ffffff'; c.shadowColor = '#3de8ff'; c.shadowBlur = 18; c.font = '700 120px "Teko", "Chakra Petch", sans-serif'; c.fillText(String(Math.round(kmh)), cx, cy - 10); c.shadowBlur = 0;
+    c.fillStyle = '#7fd9ff'; c.font = '600 22px "Chakra Petch", sans-serif'; c.fillText('KM/H', cx, cy + 58);
+    c.fillStyle = '#c6a3ff'; c.font = '800 56px "Teko", "Chakra Petch", sans-serif'; c.fillText(car.gear < 0 ? 'R' : (opts.auto ? 'D' : 'M') + car.gear, cx, cy + 110);
+    const bar = (x, label, v, col) => { c.fillStyle = 'rgba(255,255,255,0.08)'; c.fillRect(x, 120, 26, 200); c.fillStyle = col; c.shadowColor = col; c.shadowBlur = 12; c.fillRect(x, 120 + 200 * (1 - v), 26, 200 * v); c.shadowBlur = 0; c.fillStyle = '#9fb4cc'; c.font = '600 18px "Chakra Petch", sans-serif'; c.fillText(label, x + 13, 345); };
+    if (car.fuel !== undefined) bar(150, 'FUEL', clamp(car.fuel, 0, 1), '#3de8ff'); if (car.nitro !== undefined) bar(848, 'NOS', clamp(car.nitro, 0, 1), '#a55bff');
+    if (weather.rain > 0.12){ c.fillStyle = '#3de8ff'; c.font = '700 18px "Chakra Petch", sans-serif'; c.fillText('WIPERS AUTO', 512, 30); }
     gTex.needsUpdate = true;
+    // the shift lights across the top of the wheel
+    const lim = rk > 0.94 && (performance.now() / 70 | 0) % 2;
+    for (let k = 0; k < SHIFT.length; k++){ const on = rk > 0.55 + k * 0.045; SHIFT[k].material = lim ? LIM : on ? (k < 3 ? SG : k < 6 ? SV : SR) : SOFF; }
   }
-  // centre screen: a phone-style grid of apps and the clock
-  const sc = document.createElement('canvas'); sc.width = 512; sc.height = 256; const sx = sc.getContext('2d'), sTex = new THREE.CanvasTexture(sc);
-  add(new THREE.PlaneGeometry(0.3, 0.15), new THREE.MeshBasicMaterial({ map: sTex }), -0.12, 1.0, 0.47, 0, Math.PI - 0.35, 0).rotation.order = 'YXZ';
-  let lastMin = -1;
-  function drawScreen(){ const m = Math.floor(DAY.t * 60) % 1440; if (m === lastMin) return; lastMin = m;
-    sx.fillStyle = '#0a0d14'; sx.fillRect(0, 0, 512, 256); const cols = ['#3ee07a', '#ff9f1a', '#1f8bff', '#ff3d6e', '#ffd23d', '#a86bff', '#18c7d8', '#ffffff'];
-    for (let i = 0; i < 8; i++){ const x = 110 + (i % 4) * 100, y = 70 + Math.floor(i / 4) * 100; sx.fillStyle = cols[i]; sx.beginPath(); sx.roundRect ? sx.roundRect(x - 32, y - 32, 64, 64, 14) : sx.rect(x - 32, y - 32, 64, 64); sx.fill(); }
-    sx.fillStyle = '#e8edf5'; sx.font = '700 26px "Chakra Petch", sans-serif'; sx.textAlign = 'left'; sx.fillText(String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'), 14, 34);
-    sx.fillStyle = '#1b2130'; sx.fillRect(0, 0, 46, 256); sTex.needsUpdate = true; }
-  // the steering wheel: tilted towards you; spin turns with your steering, hands and all
-  const wheel = new THREE.Group(); wheel.position.set(0.36, 0.86, 0.1); wheel.rotation.set(0.38, Math.PI, 0); g.add(wheel);
+  // ---------- the centre stack: glowing vent rings, a screen set into the dash, touch buttons, the start button
+  add(new THREE.BoxGeometry(0.36, 0.42, 0.05), carbon, -0.03, 0.74, 0.175, -0.2, 0, 0);
+  for (const vx of [-0.13, 0.07]){ add(new THREE.CylinderGeometry(0.052, 0.052, 0.03, 24), new THREE.MeshBasicMaterial({ color: 0x030406 }), vx, 0.89, 0.155, Math.PI / 2 - 0.2, 0, 0);
+    add(new THREE.TorusGeometry(0.054, 0.006, 8, 28), glowC, vx, 0.89, 0.142, -0.2, 0, 0); for (let k = -2; k <= 2; k++) add(new THREE.BoxGeometry(0.09, 0.005, 0.01), brushed, vx, 0.89 + k * 0.016, 0.145, -0.2, 0, 0); }
+  { add(new THREE.BoxGeometry(0.28, 0.17, 0.02), new THREE.MeshBasicMaterial({ color: 0x020306 }), -0.03, 0.765, 0.152, -0.2, 0, 0);
+    add(new THREE.BoxGeometry(0.29, 0.004, 0.02), glowV, -0.03, 0.852, 0.15, -0.2, 0, 0);
+    const sc = document.createElement('canvas'); sc.width = 512; sc.height = 300; const sx = sc.getContext('2d'), sTex = new THREE.CanvasTexture(sc);
+    const plane = add(new THREE.PlaneGeometry(0.255, 0.148), new THREE.MeshBasicMaterial({ map: sTex }), -0.03, 0.765, 0.139); plane.rotation.set(-0.2, Math.PI, 0, 'YXZ');
+    let lastMin = -1; CP_drawScreen = () => { const m = Math.floor((DAY.t || 0) * 60) % 1440; if (m === lastMin) return; lastMin = m;
+      const gr = sx.createLinearGradient(0, 0, 512, 300); gr.addColorStop(0, '#0a1020'); gr.addColorStop(1, '#120a22'); sx.fillStyle = gr; sx.fillRect(0, 0, 512, 300);
+      sx.strokeStyle = 'rgba(165,91,255,0.25)'; sx.lineWidth = 1; for (let k = 0; k < 14; k++){ sx.beginPath(); sx.moveTo(60 + k * 34, 0); sx.lineTo(20 + k * 34, 300); sx.stroke(); }
+      sx.strokeStyle = 'rgba(61,232,255,0.7)'; sx.lineWidth = 4; sx.beginPath(); sx.moveTo(80, 270); sx.bezierCurveTo(160, 200, 220, 230, 300, 120); sx.lineTo(470, 40); sx.stroke(); // a glowing route on a map
+      sx.fillStyle = '#3de8ff'; sx.beginPath(); sx.arc(300, 120, 9, 0, TAU); sx.fill();
+      sx.fillStyle = '#e8f4ff'; sx.font = '600 26px "Chakra Petch", sans-serif'; sx.textAlign = 'left'; sx.fillText(String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'), 400, 36);
+      sx.fillStyle = 'rgba(10,14,28,0.85)'; sx.fillRect(0, 230, 512, 70); sx.fillStyle = '#a55bff'; sx.fillRect(20, 286, 300, 4); sx.fillStyle = '#c9d8ee'; sx.font = '600 18px "Chakra Petch", sans-serif'; sx.fillText('NOW PLAYING · NIGHT FM 88.3', 20, 262); sTex.needsUpdate = true; }; }
+  for (let k = 0; k < 6; k++) add(new THREE.BoxGeometry(0.03, 0.012, 0.012), k % 2 ? glowV : glowC, -0.115 + k * 0.034, 0.655, 0.13, -0.2, 0, 0);
+  add(new THREE.CylinderGeometry(0.02, 0.02, 0.012, 20), new THREE.MeshBasicMaterial({ color: 0x220810 }), 0.17, 0.8, 0.15, Math.PI / 2 - 0.2, 0, 0); add(new THREE.TorusGeometry(0.022, 0.004, 6, 24), new THREE.MeshBasicMaterial({ color: 0xff3d6e }), 0.17, 0.8, 0.143, -0.2, 0, 0); // start / stop, glowing red
+  // ---------- console: carbon, a glowing seam down each side, the gear lever and its lit knob
+  add(new THREE.BoxGeometry(0.28, 0.12, 0.95), carbon, -0.02, 0.5, -0.2); for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.004, 0.004, 0.9), glowC, -0.02 + s * 0.142, 0.555, -0.2);
+  const lever = new THREE.Group(); lever.position.set(-0.02, 0.57, 0.02); g.add(lever);
+  add(new THREE.ConeGeometry(0.05, 0.06, 12), leather, 0, 0.02, 0, 0, 0, 0, lever); add(new THREE.CylinderGeometry(0.009, 0.011, 0.12, 8), chrome, 0, 0.09, 0, 0, 0, 0, lever);
+  add(new THREE.SphereGeometry(0.032, 14, 10), carbon, 0, 0.165, 0, 0, 0, 0, lever).scale.set(1, 0.85, 1.15); add(new THREE.TorusGeometry(0.03, 0.003, 6, 24), glowV, 0, 0.165, 0, Math.PI / 2, 0, 0, lever);
+  add(new THREE.BoxGeometry(0.035, 0.03, 0.22), leather, -0.02, 0.575, -0.4, -0.12, 0, 0);
+  // ---------- doors: Alcantara panels, leather armrests, a glowing line, brushed handles, switches; footwell glow
+  for (const s of [1, -1]){ const x = s * (W - 0.02);
+    add(new THREE.BoxGeometry(0.05, 0.52, 1.8), softM, x, 0.68, -0.32); add(new THREE.BoxGeometry(0.11, 0.05, 0.62), leather, x - s * 0.06, 0.68, -0.4);
+    add(new THREE.BoxGeometry(0.004, 0.006, 1.5), s > 0 ? glowC : glowV, x - s * 0.028, 0.87, -0.32); add(new THREE.BoxGeometry(0.03, 0.02, 0.13), brushed, x - s * 0.03, 0.8, 0.18);
+    if (s > 0) for (const z of [-0.5, -0.42]) add(new THREE.BoxGeometry(0.03, 0.012, 0.03), brushed, x - s * 0.1, 0.71, z);
+    add(new THREE.BoxGeometry(0.06, 0.08, 0.5), dashM, x - s * 0.02, 0.92, 0.6);
+    add(new THREE.PlaneGeometry(0.5, 0.5), haze(s > 0 ? CY : VI, 0.07), s * 0.4, 0.33, 0.25, -Math.PI / 2, 0, 0); }
+  add(new THREE.BoxGeometry(W * 2, 0.04, 2.3), carpet, 0, 0.3, -0.3);
+  // ---------- the glass: tinted side windows in thin frames, and a faint sheen on the windscreen
+  const glassM = new THREE.MeshBasicMaterial({ color: 0x8fb0d8, transparent: true, opacity: 0.07, depthWrite: false, side: THREE.DoubleSide });
+  for (const s of [1, -1]){ const x = s * (W + 0.02), wg = new THREE.Shape(); wg.moveTo(0.82, 0); wg.lineTo(-0.95, 0); wg.lineTo(-0.85, 0.3); wg.quadraticCurveTo(-0.4, 0.38, 0.05, 0.37); wg.lineTo(0.82, 0.02); wg.lineTo(0.82, 0);
+    const win = new THREE.Mesh(new THREE.ShapeGeometry(wg, 8), glassM); win.rotation.y = -Math.PI / 2; win.position.set(x, 0.95, 0); g.add(win);
+    add(new THREE.BoxGeometry(0.03, 0.025, 1.8), dashM, x - s * 0.01, 0.95, -0.07); add(new THREE.BoxGeometry(0.03, 0.025, 1.0), dashM, x - s * 0.01, 1.37, -0.45); }
+  const sheen = add(new THREE.PlaneGeometry(1.8, 1.14), new THREE.MeshBasicMaterial({ color: 0x8fb0d8, transparent: true, opacity: 0.035, depthWrite: false, side: THREE.DoubleSide }), 0, 1.09, 0.33);
+  // ---------- pillars, the Alcantara roof with a glowing edge, visors, the mirror with an air freshener hanging from it
+  for (const s of [-1, 1]) between(new THREE.CylinderGeometry(0.035, 0.05, 1, 10), dashM, V(s * (W - 0.07), 0.92, 0.84), V(s * (W - 0.17), 1.38, -0.24));
+  add(new THREE.BoxGeometry(W * 2 - 0.1, 0.03, 1.35), roofM, 0, 1.39, -0.9); add(new THREE.BoxGeometry(W * 2 - 0.14, 0.03, 0.08), dashM, 0, 1.39, -0.25); add(new THREE.BoxGeometry(W * 2 - 0.2, 0.004, 0.004), glowV, 0, 1.372, -0.29);
+  for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.4, 0.022, 0.17), roofM, s * 0.38, 1.365, -0.22, 0.1, 0, 0);
+  add(new THREE.CylinderGeometry(0.008, 0.008, 0.12, 6), dashM, 0, 1.32, -0.14); add(new THREE.BoxGeometry(0.28, 0.075, 0.035), dashM, 0, 1.24, -0.12); add(new THREE.BoxGeometry(0.28, 0.003, 0.036), glowC, 0, 1.2, -0.12);
+  { const fr = canvasTex(64, 96, (c) => { c.fillStyle = '#f0e6c8'; c.fillRect(0, 0, 64, 96); c.fillStyle = '#2d6a3a'; c.beginPath(); c.moveTo(32, 8); c.lineTo(56, 80); c.lineTo(8, 80); c.fill(); c.fillStyle = '#5a3a20'; c.fillRect(28, 80, 8, 12); });
+    const hang = new THREE.Group(); hang.position.set(0.06, 1.2, -0.12); g.add(hang); add(new THREE.CylinderGeometry(0.0015, 0.0015, 0.07, 4), ledW, 0, -0.035, 0, 0, 0, 0, hang);
+    add(new THREE.PlaneGeometry(0.045, 0.068), new THREE.MeshBasicMaterial({ map: fr, side: THREE.DoubleSide, color: 0x9a9a9a }), 0, -0.1, 0, 0, Math.PI, 0, hang); CP_hang = hang; }
+  // ---------- mirrors that work: little cameras render what's behind into their glass, one mirror per frame
+  const mkMirror = (w, h, fov, aspect, pos, yaw, mx, my, mz, gw, gh, gry) => { const rt = new THREE.WebGLRenderTarget(w, h); rt.texture.wrapS = THREE.RepeatWrapping; rt.texture.repeat.x = -1; rt.texture.offset.x = 1;
+    const cam2 = new THREE.PerspectiveCamera(fov, aspect, 0.5, 420); cam2.position.copy(pos); cam2.rotation.set(-0.04, yaw, 0, 'YXZ'); pBody.add(cam2);
+    const glass = add(new THREE.PlaneGeometry(gw, gh), new THREE.MeshBasicMaterial({ map: rt.texture, color: 0xd8dde4 }), mx, my, mz); glass.rotation.set(0, Math.PI + gry, 0); return { rt, cam: cam2, glass }; };
+  const MIRRORS = [mkMirror(384, 96, 22, 4, V(0, 1.3, -2.45), 0, 0, 1.24, -0.14, 0.26, 0.064, 0),
+    mkMirror(320, 200, 40, 1.6, V(W + 0.16, 1.0, 0.45), -0.24, W + 0.13, 0.985, 0.405, 0.31, 0.19, -0.35), mkMirror(320, 200, 40, 1.6, V(-W - 0.16, 1.0, 0.45), 0.24, -W - 0.13, 0.985, 0.405, 0.31, 0.19, 0.35)]; // big door mirrors with a wide view
+  for (const s of [1, -1]){ const hs = add(new THREE.SphereGeometry(1, 16, 10), pPaint, s * (W + 0.13), 0.985, 0.49); hs.scale.set(0.175, 0.11, 0.07); add(new THREE.BoxGeometry(0.34, 0.215, 0.012), dashM, s * (W + 0.13), 0.985, 0.42, 0, -s * 0.35, 0); // housing, and a frame round the glass add(new THREE.BoxGeometry(0.14, 0.025, 0.05), dashM, s * (W - 0.02), 0.93, 0.56);
+    add(new THREE.BoxGeometry(0.2, 0.004, 0.004), s > 0 ? glowC : glowV, s * (W + 0.08), 0.91, 0.43); }
+  let mI = 0; function renderMirrors(){ const M = MIRRORS[mI = (mI + 1) % MIRRORS.length]; M.cam.updateMatrixWorld(); const keep = renderer.getRenderTarget(); renderer.setRenderTarget(M.rt); renderer.render(scene, M.cam); renderer.setRenderTarget(keep); }
+  // ---------- the bonnet ahead (the outside body is hidden in this view), with its stripes
+  { const s = new THREE.Shape(); s.moveTo(-0.9, 0); s.lineTo(-0.82, -1.35); s.quadraticCurveTo(0, -1.45, 0.82, -1.35); s.lineTo(0.9, 0); s.lineTo(-0.9, 0); add(new THREE.ShapeGeometry(s, 8), pPaint, 0, 0.93, 0.86, -Math.PI / 2 + 0.12, 0, 0);
+    for (const x of [-0.13, 0.13]){ const st = new THREE.Shape(); st.moveTo(x - 0.06, 0); st.lineTo(x - 0.06, -1.36); st.lineTo(x + 0.06, -1.36); st.lineTo(x + 0.06, 0); add(new THREE.ShapeGeometry(st), STRIPE, 0, 0.934, 0.86, -Math.PI / 2 + 0.12, 0, 0); } }
+  // ---------- the wipers: two arms parked along the bottom of the windscreen that sweep with the rain
+  const WSQ = (() => { const up = V(0, 0.42, -1.08).normalize(), xa = V(-1, 0, 0), n = V().crossVectors(xa, up); return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xa, up, n)); })();
+  const wipers = []; { const frame = new THREE.Group(); frame.quaternion.copy(WSQ); frame.position.set(0, 1.08, 0.33); g.add(frame); const L = 300 / 384 * 1.14, armM = new THREE.MeshLambertMaterial({ color: 0x0b0c10, emissive: 0x050608 });
+    for (const px of [150, 400]){ const pv = new THREE.Group(); pv.position.set(px / 512 * 1.42 - 0.71, -0.555, 0.012); frame.add(pv);
+      add(new THREE.BoxGeometry(L, 0.012, 0.012).translate(L / 2, 0, 0), armM, 0, 0, 0, 0, 0, 0, pv); add(new THREE.BoxGeometry(L * 0.9, 0.008, 0.02).translate(L * 0.55, 0.008, 0), armM, 0, 0, 0, 0, 0, 0, pv); wipers.push(pv); } }
+  // ---------- the driver: knees in a white race suit
+  for (const s of [-1, 1]){ const hip = V(EYE.x + s * 0.11, 0.47, -0.62), knee = V(EYE.x + s * 0.13, 0.6, 0.02), foot = V(EYE.x + s * 0.12, 0.28, 0.45);
+    between(new THREE.CylinderGeometry(0.068, 0.078, 1, 12), suit, hip, knee); between(new THREE.CylinderGeometry(0.055, 0.068, 1, 12), suit, knee, foot); add(new THREE.SphereGeometry(0.07, 12, 8), suit, knee.x, knee.y, knee.z); }
+  // ---------- the wheel: flat-bottomed, leather and carbon, a glowing badge, shift lights across the top
+  const wheel = new THREE.Group(); wheel.position.set(EYE.x, 0.86, 0.06); wheel.rotation.set(0.38, Math.PI, 0); g.add(wheel);
   const spin = new THREE.Group(); wheel.add(spin);
-  add(new THREE.TorusGeometry(0.185, 0.026, 12, 48), leather, 0, 0, 0, 0, 0, 0, spin);
-  add(new THREE.BoxGeometry(0.035, 0.014, 0.03), red, 0, 0.185, 0.0, 0, 0, 0, spin); // the red centre stripe at twelve o'clock
-  for (const a of [0, Math.PI, -Math.PI / 2]){ const sp = add(new THREE.BoxGeometry(0.16, 0.035, 0.02), trim, Math.cos(a) * 0.09, Math.sin(a) * 0.09, 0, 0, 0, a, spin); }
-  add(new THREE.CylinderGeometry(0.065, 0.07, 0.04, 24), leather, 0, 0, -0.01, Math.PI / 2, 0, 0, spin);
-  { const bt = canvasTex(128, 128, (c2) => { c2.fillStyle = '#d8dde5'; c2.beginPath(); c2.arc(64, 64, 60, 0, TAU); c2.fill(); c2.fillStyle = '#0d0e12'; c2.beginPath(); c2.arc(64, 64, 52, 0, TAU); c2.fill(); c2.fillStyle = '#3aa8ff'; c2.beginPath(); c2.moveTo(64, 64); c2.arc(64, 64, 40, -Math.PI / 2, 0); c2.fill(); c2.beginPath(); c2.moveTo(64, 64); c2.arc(64, 64, 40, Math.PI / 2, Math.PI); c2.fill(); c2.fillStyle = '#ffffff'; c2.beginPath(); c2.moveTo(64, 64); c2.arc(64, 64, 40, 0, Math.PI / 2); c2.fill(); c2.beginPath(); c2.moveTo(64, 64); c2.arc(64, 64, 40, Math.PI, Math.PI * 1.5); c2.fill(); });
-    add(new THREE.CircleGeometry(0.03, 24), new THREE.MeshBasicMaterial({ map: bt }), 0, 0, -0.032, 0, Math.PI, 0, spin); }
-  for (const [x, y, c] of [[-0.06, 0.02, 0xff5a1e], [-0.06, -0.02, 0xff5a1e], [0.06, 0.02, 0xd8dde5], [0.06, -0.02, 0xff2a3a]]) add(new THREE.CircleGeometry(0.008, 10), new THREE.MeshBasicMaterial({ color: c }), x, y, -0.022, 0, Math.PI, 0, spin);
-  add(new THREE.CylinderGeometry(0.03, 0.035, 0.3, 10), dark, 0, 0, 0.15, Math.PI / 2, 0, 0, wheel); // the column
-  // gloved hands at a quarter to three, and the sleeves reaching back to your elbows
-  const glove = IM(0xc9cbd1, 0x2a2b2f), sleeve = IM(0x1d1e24, 0x08080a), hands = [];
-  for (const s of [-1, 1]){ const h = new THREE.Group(), ang = s > 0 ? 0.25 : Math.PI - 0.25; h.position.set(Math.cos(ang) * 0.185, Math.sin(ang) * 0.185, 0); h.rotation.z = ang; spin.add(h);
-    add(new THREE.SphereGeometry(1, 14, 10), glove, 0, 0, -0.012, 0, 0, 0, h).scale.set(0.042, 0.06, 0.04); // palm and fingers wrapped round the rim
-    add(new THREE.TorusGeometry(0.03, 0.013, 8, 16, Math.PI * 1.4), glove, 0, 0, 0, Math.PI / 2, 0, 0, h); // fingers over the top
-    add(new THREE.SphereGeometry(1, 10, 8), glove, -0.02, s * 0.03, -0.035, 0, 0, 0, h).scale.set(0.016, 0.03, 0.016); // thumb
-    const arm = add(new THREE.CylinderGeometry(0.03, 0.038, 1, 12), sleeve, 0, 0, 0); const cuff = add(new THREE.CylinderGeometry(0.027, 0.03, 1, 12), glove, 0, 0, 0);
-    hands.push({ h, arm, cuff, elbow: new THREE.Vector3(EYE.x + s * -0.3, 0.66, -0.22) }); }
-  const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _u = new THREE.Vector3(0, 1, 0);
-  const span = (m, a, b) => { m.position.copy(a).add(b).multiplyScalar(0.5); m.scale.set(1, a.distanceTo(b), 1); m.quaternion.setFromUnitVectors(_u, _w.copy(b).sub(a).normalize()); };
-  // the windscreen: rain gathers on a transparent canvas just inside the glass; two wiper blades sweep it
+  { const pts = []; for (let k = 0; k < 64; k++){ const a = k / 64 * TAU; let x = Math.cos(a) * 0.19, y = Math.sin(a) * 0.19; if (y < -0.15){ x *= 1 + (-0.15 - y) * 1.2; y = -0.15; } pts.push(V(x, y, 0)); }
+    add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 128, 0.027, 10, true), leather, 0, 0, 0, 0, 0, 0, spin); }
+  add(new THREE.TorusGeometry(0.19, 0.0035, 6, 20, 0.35), glowC, 0, 0, -0.026, 0, 0, Math.PI / 2 - 0.175, spin); // a cyan marker at twelve o'clock
+  for (const a of [0, Math.PI]){ add(new THREE.BoxGeometry(0.12, 0.05, 0.02), carbon, Math.cos(a) * 0.1, -0.01, -0.005, 0, 0, 0, spin);
+    for (let k = 0; k < 4; k++) add(new THREE.CircleGeometry(0.008, 10), k === 0 ? glowC : k === 1 ? glowV : ledW, Math.cos(a) * (0.075 + (k % 2) * 0.03), k < 2 ? 0.01 : -0.018, -0.017, 0, Math.PI, 0, spin); }
+  add(new THREE.BoxGeometry(0.035, 0.11, 0.02), carbon, 0, -0.1, -0.005, 0, 0, 0, spin);
+  add(new THREE.CylinderGeometry(0.072, 0.078, 0.05, 28), leather, 0, -0.005, -0.012, Math.PI / 2, 0, 0, spin);
+  { const bt = canvasTex(128, 128, (c) => { c.fillStyle = '#05070c'; c.fillRect(0, 0, 128, 128); c.strokeStyle = '#3de8ff'; c.shadowColor = '#3de8ff'; c.shadowBlur = 14; c.lineWidth = 6; c.beginPath(); c.arc(64, 64, 46, 0, TAU); c.stroke(); c.fillStyle = '#e8f4ff'; c.font = '900 52px "Chakra Petch", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('N', 64, 68); });
+    add(new THREE.CircleGeometry(0.03, 24), new THREE.MeshBasicMaterial({ map: bt }), 0, 0, -0.039, 0, Math.PI, 0, spin); }
+  add(new THREE.BoxGeometry(0.17, 0.022, 0.02), carbon, 0, 0.12, -0.012, 0, 0, 0, spin); for (let k = 0; k < 9; k++) SHIFT.push(add(new THREE.BoxGeometry(0.012, 0.01, 0.006), SOFF, -0.064 + k * 0.016, 0.12, -0.024, 0, 0, 0, spin));
+  add(new THREE.CylinderGeometry(0.03, 0.04, 0.32, 10), dashM, 0, 0, 0.16, Math.PI / 2, 0, 0, wheel);
+  // ---------- hands: racing gloves wrapped round the rim; arms in the white suit back to your shoulders
+  const mkHand = s => { const h = new THREE.Group(); g.add(h);
+    add(new THREE.SphereGeometry(1, 14, 10), glove, 0.012, 0, 0.012, 0, 0, 0, h).scale.set(0.038, 0.052, 0.03);
+    for (let k = 0; k < 4; k++) add(new THREE.TorusGeometry(0.03, 0.0105, 6, 12, Math.PI * 1.35), glove, 0, -0.03 + k * 0.019, 0, Math.PI / 2, 0, -0.6, h);
+    add(new THREE.BoxGeometry(0.03, 0.06, 0.012), gloveDark, 0.034, 0, -0.004, 0, 0, 0, h); add(new THREE.BoxGeometry(0.004, 0.05, 0.013), glowC, 0.034, 0, -0.011, 0, 0, 0, h);
+    add(new THREE.CylinderGeometry(0.011, 0.013, 0.05, 8), glove, -0.022, s * 0.032, 0.018, 0.4, 0, s * 0.9, h);
+    const cuff = add(new THREE.CylinderGeometry(0.032, 0.034, 1, 12), gloveDark, 0, 0, 0), arm = add(new THREE.CylinderGeometry(0.036, 0.046, 1, 12), suit, 0, 0, 0), up = add(new THREE.CylinderGeometry(0.046, 0.055, 1, 12), suit, 0, 0, 0);
+    return { s, h, cuff, arm, up, elbow: V(EYE.x - s * 0.31, 0.64, -0.36), shoulder: V(EYE.x - s * 0.21, 0.97, -0.86), ang: s > 0 ? 0.28 : Math.PI - 0.28 }; };
+  const hands = [mkHand(1), mkHand(-1)]; // s = 1 is your right hand (it does the gear changes)
+  const shift = { t: 9, dir: 1, gear: 1 };
+  let wT = 0, gT = 0;
+  // ---------- the windscreen: rain on a transparent canvas just inside the glass; the wiper arms wipe it
   const wc = document.createElement('canvas'); wc.width = 512; wc.height = 384; const wx = wc.getContext('2d'), wTex = new THREE.CanvasTexture(wc);
-  const wMat = new THREE.MeshBasicMaterial({ map: wTex, transparent: true, depthWrite: false, fog: false });
-  const shield = new THREE.Mesh(new THREE.PlaneGeometry(1.42, 1.14), wMat); g.add(shield);
-  { const up = new THREE.Vector3(0, 0.42, -1.08).normalize(), xa = new THREE.Vector3(-1, 0, 0), n = new THREE.Vector3().crossVectors(xa, up); shield.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xa, up, n)); shield.position.set(0, 1.08, 0.32); }
-  const drops = [], WIPERS = [{ px: 150, len: 300 }, { px: 400, len: 300 }];
-  const wip = { a: 0.06, dir: 1, park: true, wait: 0 };
-  let wT = 0;
+  const shield = new THREE.Mesh(new THREE.PlaneGeometry(1.42, 1.14), new THREE.MeshBasicMaterial({ map: wTex, transparent: true, depthWrite: false, fog: false })); g.add(shield);
+  shield.quaternion.copy(WSQ); shield.position.set(0, 1.08, 0.32); sheen.quaternion.copy(WSQ); sheen.position.set(0, 1.08, 0.335);
+  const drops = [], WIPERS = [{ px: 150, len: 300 }, { px: 400, len: 300 }], wip = { a: 0.06, dir: 1, wait: 0 };
   function drawShield(dt){
     const rain = weather.rain, sp = Math.abs(car.vx);
-    // new drops land faster in heavy rain and at speed, and run up the glass in the wind
     const n = rain > 0.05 ? rain * (14 + sp * 0.5) * dt : 0; for (let k = 0; k < n + (Math.random() < n % 1 ? 1 : 0); k++) drops.push({ x: Math.random() * 512, y: Math.random() * 384, r: 1.2 + Math.random() * Math.random() * 3.2 * (0.6 + rain), a: 0.3 + Math.random() * 0.4 });
     for (const d of drops){ if (sp > 8) d.y -= sp * dt * (0.4 + d.r * 0.06); }
-    // the wipers: back and forth while it rains (faster in a downpour), parked flat when it's dry
-    const on = rain > 0.12, speed = rain > 0.5 ? 2.6 : 1.7;
-    const prev = wip.a;
+    const on = rain > 0.12, speed = rain > 0.5 ? 2.6 : 1.7, prev = wip.a;
     if (on || wip.a > 0.06){ if (wip.wait > 0) wip.wait -= dt; else { wip.a += wip.dir * speed * dt; if (wip.a > 2.5){ wip.a = 2.5; wip.dir = -1; sfx.bump(0.6); } if (wip.a < 0.06){ wip.a = 0.06; wip.dir = 1; wip.wait = rain > 0.5 ? 0 : 0.9; } } }
-    // anything a blade passes over is wiped off
+    for (const pv of wipers) pv.rotation.z = Math.PI - wip.a; // the arms follow the same sweep
     const lo = Math.min(prev, wip.a), hi = Math.max(prev, wip.a);
     for (let i = drops.length - 1; i >= 0; i--){ const d = drops[i]; if (d.y < -10){ drops.splice(i, 1); continue; }
-      for (const W of WIPERS){ const dx = d.x - W.px, dy = 384 - d.y, r = Math.hypot(dx, dy), a = Math.atan2(dy, -dx); if (r < W.len && a >= lo - 0.05 && a <= hi + 0.05){ drops.splice(i, 1); break; } } }
+      for (const Wp of WIPERS){ const dx = d.x - Wp.px, dy = 384 - d.y, r = Math.hypot(dx, dy), a = Math.atan2(dy, -dx); if (r < Wp.len && a >= lo - 0.05 && a <= hi + 0.05){ drops.splice(i, 1); break; } } }
     if (drops.length > 1400) drops.splice(0, drops.length - 1400);
     wT -= dt; if (wT > 0) return; wT = 1 / 24;
     wx.clearRect(0, 0, 512, 384);
-    if (weather.wet > 0.05){ wx.fillStyle = 'rgba(150,165,185,' + (0.1 * weather.wet + 0.08 * rain) + ')'; wx.fillRect(0, 0, 512, 384); } // a film of water: everything a little greyer and softer
+    if (weather.wet > 0.05){ wx.fillStyle = 'rgba(150,165,185,' + (0.1 * weather.wet + 0.08 * rain) + ')'; wx.fillRect(0, 0, 512, 384); }
     for (const d of drops){ const gr = wx.createRadialGradient(d.x - d.r * 0.3, d.y - d.r * 0.3, 0, d.x, d.y, d.r); gr.addColorStop(0, 'rgba(255,255,255,' + d.a + ')'); gr.addColorStop(0.6, 'rgba(160,180,210,' + d.a * 0.5 + ')'); gr.addColorStop(1, 'rgba(20,30,40,' + d.a * 0.6 + ')'); wx.fillStyle = gr; wx.beginPath(); wx.ellipse(d.x, d.y, d.r * 0.8, d.r, 0, 0, TAU); wx.fill(); }
-    wx.strokeStyle = 'rgba(8,9,12,0.95)'; wx.lineWidth = 9; wx.lineCap = 'round';
-    for (const W of WIPERS){ wx.beginPath(); wx.moveTo(W.px, 384); wx.lineTo(W.px - Math.cos(wip.a) * W.len, 384 - Math.sin(wip.a) * W.len); wx.stroke(); }
     wTex.needsUpdate = true;
   }
-  let gT = 0;
-  return { g, EYE, wheel, spin, hands, span, drawGauges, drawScreen, drawShield, ang: 0, angV: 0, look: 0, sway: 0, tick(dt){ gT -= dt; if (gT <= 0){ gT = 1 / 15; drawGauges(); drawScreen(); } drawShield(dt); } };
+  return { g, EYE, wheel, spin, hands, lever, shift, MIRRORS, renderMirrors, drawGauges, drawShield, ang: 0, angV: 0, look: 0, sway: 0,
+    tick(dt){ gT -= dt; if (gT <= 0){ gT = 1 / 15; drawGauges(); CP_drawScreen(); } drawShield(dt); renderMirrors(); } };
 })();
-// the wheel follows your steering through a little spring, so it winds on and unwinds smoothly like a real one
+// ---------- each frame in the cockpit
 let cpWas = false;
+const _m1 = new THREE.Matrix4(), _m2 = new THREE.Matrix4(), _pA = new THREE.Vector3(), _qA = new THREE.Quaternion(), _sA = new THREE.Vector3(), _pB = new THREE.Vector3(), _qB = new THREE.Quaternion(), _wr = new THREE.Vector3();
+const LEVER_Q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.25, Math.PI, 0.35, 'YXZ'));
 function updateCockpit(dt){
-  const on = opts.cam === 4 && started;
+  const on = opts.cam >= 4 && started;
   if (on !== cpWas){ cpWas = on; // swap the outside of the car for the inside, and put everything back after
-    for (const o of pBody.children){ if (o === CP.g) continue; if (on){ o.userData.vis = o.visible; o.visible = false; } else if (o.userData.vis !== undefined) o.visible = o.userData.vis; } }
+    for (const o of pBody.children){ if (o === CP.g || o.isCamera) continue; if (on){ o.userData.vis = o.visible; o.visible = false; } else if (o.userData.vis !== undefined) o.visible = o.userData.vis; } }
   CP.g.visible = on; if (!on) return;
-  const target = car.steerIn * 2.4; // about 140 degrees each way at full lock
-  const k = 60, c = 13; CP.angV += ((target - CP.ang) * k - CP.angV * c) * dt; CP.ang += CP.angV * dt; CP.spin.rotation.z = CP.ang;
+  // the wheel follows your steering through a little spring, so it winds on and unwinds smoothly like a real one
+  const target = car.steerIn * 2.4, k = 60, c = 13; CP.angV += ((target - CP.ang) * k - CP.angV * c) * dt; CP.ang += CP.angV * dt; CP.spin.rotation.z = CP.ang;
   CP.wheel.updateMatrix(); CP.spin.updateMatrix();
-  for (const H of CP.hands){ H.h.updateMatrix(); const p = new THREE.Vector3(0, 0, 0.03).applyMatrix4(H.h.matrix).applyMatrix4(CP.spin.matrix).applyMatrix4(CP.wheel.matrix);
-    const wrist = p.clone().add(new THREE.Vector3(0, -0.02, -0.07)); CP.span(H.cuff, p, wrist); CP.span(H.arm, wrist, H.elbow); }
+  // a gear change: the right hand goes to the lever, pushes it, and comes back to the wheel
+  const S = CP.shift; if (car.gear !== S.gear){ S.dir = car.gear > S.gear ? 1 : -1; S.gear = car.gear; S.t = S.t < 0.6 ? Math.min(S.t, 0.18) : 0; } S.t += dt;
+  const reach = S.t < 0.18 ? smooth(0, 0.18, S.t) : S.t < 0.36 ? 1 : 1 - smooth(0.36, 0.62, S.t), push = S.t > 0.16 && S.t < 0.4 ? Math.sin((S.t - 0.16) / 0.24 * Math.PI) : 0;
+  CP.lever.rotation.x = -S.dir * 0.3 * push; CP.lever.updateMatrix();
+  for (const H of CP.hands){
+    _m1.makeRotationZ(H.ang).setPosition(Math.cos(H.ang) * 0.19, Math.sin(H.ang) * 0.19, 0); _m2.multiplyMatrices(CP.wheel.matrix, CP.spin.matrix).multiply(_m1); _m2.decompose(_pA, _qA, _sA);
+    if (H.s > 0 && reach > 0){ _pB.set(0, 0.2, -0.01).applyMatrix4(CP.lever.matrix); _qB.copy(LEVER_Q); _pA.lerp(_pB, reach); _qA.slerp(_qB, reach); _pA.y += Math.sin(reach * Math.PI) * 0.05; }
+    H.h.position.copy(_pA); H.h.quaternion.copy(_qA);
+    _wr.set(0, 0, 0.075).applyQuaternion(_qA).add(_pA);
+    spanM(H.cuff, _pA, _wr); spanM(H.arm, _wr, H.elbow); spanM(H.up, H.elbow, H.shoulder);
+  }
+  if (CP_hang){ CP_hang.rotation.z = lerp(CP_hang.rotation.z, clamp(-car.ayF * 0.02, -0.5, 0.5), Math.min(1, dt * 3)); CP_hang.rotation.x = lerp(CP_hang.rotation.x, clamp(car.axF * 0.015, -0.4, 0.4), Math.min(1, dt * 3)); } // the air freshener swings
   CP.tick(dt);
 }
+const _su = new THREE.Vector3(0, 1, 0), _sw = new THREE.Vector3();
+function spanM(m, a, b){ m.position.copy(a).add(b).multiplyScalar(0.5); m.scale.set(1, Math.max(0.001, a.distanceTo(b)), 1); m.quaternion.setFromUnitVectors(_su, _sw.copy(b).sub(a).normalize()); }
+// the cockpit's field of view: never narrower than about 80 degrees across, so tall or narrow windows don't squash the view
+function cockpitFov(aspect, spd){ const vMin = 2 * Math.atan(Math.tan(80 * Math.PI / 360) / Math.max(0.3, aspect)) * 180 / Math.PI; return Math.max(56, vMin) + clamp(spd * 3.6 - 60, 0, 240) * 0.03; }
 // =====================================================================================================
 // WHERE YOU ARE: which road surface holds the car up, and the walls around it.
 // Every road, junction patch and pad is a drivable surface. A corner of the car that isn't over any surface
@@ -4033,15 +4135,16 @@ function densityAt(e, s){
     d *= lerp(1, c.id === 'tokai' ? 1.9 : c.id === 'nagisa' ? 1.6 : 1.4, 1 - smooth(c.half, c.half + 3500, dc)); // busier the nearer the city
     if (dc < c.half) d *= lerp(1.9, 1.3, dc / c.half); // and packed in the centre
     if (e.cls === 'cw' && dc < c.half + 6000) d *= lerp(1.45, 1, smooth(c.half, c.half + 6000, dc)); } } // the expressways into a city fill up as they get close
-  d *= 1.15; // a little busier everywhere
+  d *= 1.32; // busier everywhere
+  if (e.route === 'E1') d *= e.cls === 'cw' ? 1.85 : 1.4; // the E1, Hakone to Tokai to Hokuto, is the country's busiest road
   const n = vnoise(s / 2400 + e.id * 7.31, DENS_SEED + (e.pair ? Math.min(e.id, e.pair.id) : e.id) * 0.37);
   d *= lerp(0.5, 1.5, smooth(0.25, 0.8, n));
-  return clamp(d, 0.03, 1.7);
+  return clamp(d, 0.03, 2.6);
 }
 const densityLabel = d => d > 0.95 ? 'JAM' : d > 0.65 ? 'HEAVY' : d > 0.3 ? 'MODERATE' : 'LIGHT';
 
 // ---------- traffic cars: instanced, one set of meshes per vehicle type
-const TRAFFIC_N = 280;
+const TRAFFIC_N = 360;
 const HAZ_OFF = new THREE.Color(0.15, 0.08, 0.02);
 const HALO_TEX = canvasTex(128, 64, g => { const gr = g.createRadialGradient(64, 32, 0, 64, 32, 60); gr.addColorStop(0, 'rgba(255,60,50,0.9)'); gr.addColorStop(0.35, 'rgba(255,30,30,0.35)'); gr.addColorStop(1, 'rgba(255,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 64); });
 const HALO_MAT = new THREE.MeshBasicMaterial({ map: HALO_TEX, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false, opacity: 0, side: THREE.DoubleSide });
@@ -4100,7 +4203,7 @@ function spawnCar(c, px, pz){
     const a = rnd() * TAU, R = 430 + rnd() * 680, k = Math.floor((px + Math.cos(a) * R) / 250) * 100000 + Math.floor((pz + Math.sin(a) * R) / 250);
     const list = SPAWN_GRID.get(k); if (!list) continue;
     const [e, s] = list[Math.floor(rnd() * list.length)];
-    if (rnd() * 1.25 > densityAt(e, s)) continue;
+    if (rnd() * 1.6 > densityAt(e, s)) continue;
     const dir = e.oneway ? 1 : rnd() < 0.5 ? 1 : -1;
     if (c.truck && (e.cls === 'st' || e.cls === 'rp' || e.cls === 'al')) continue;
     const lane = c.truck && e.cls === 'cw' ? 1 + Math.floor(rnd() * 2) : Math.floor(rnd() * e.C.lanes);
@@ -5075,7 +5178,7 @@ function updateWeather(dt){
       if (x < -RB) x += 2 * RB; else if (x > RB) x -= 2 * RB;
       if (z < -RB) z += 2 * RB; else if (z > RB) z -= 2 * RB;
       rainP[o] = x; rainP[o + 1] = y; rainP[o + 2] = z;
-      if (opts.cam === 4 && x * x + z * z < 6 && y < 1.2 && y > -2){ rainArr.fill(0, q, q + 6); rainArr[q + 1] = rainArr[q + 4] = -999; continue; } // no rain falling inside the car
+      if (opts.cam >= 4 && x * x + z * z < 6 && y < 1.2 && y > -2){ rainArr.fill(0, q, q + 6); rainArr[q + 1] = rainArr[q + 4] = -999; continue; } // no rain falling inside the car
       rainArr[q] = x; rainArr[q + 1] = y; rainArr[q + 2] = z;
       rainArr[q + 3] = x + wvx * k; rainArr[q + 4] = y + fall * k; rainArr[q + 5] = z + wvz * k;
     }
@@ -5099,7 +5202,7 @@ function updateRainFx(dt){
   rfx.dataset.on = '1';
   rctx.clearRect(0, 0, W, H);
   rctx.fillStyle = `rgba(70,85,110,${0.13 * weather.rain})`; rctx.fillRect(0, 0, W, H);
-  const spd = Math.abs(car.vx), inside = opts.cam === 4 ? 0 : opts.cam >= 2 ? 1 : 0.6; // (the cockpit has its own windscreen)
+  const spd = Math.abs(car.vx), inside = opts.cam >= 4 ? 0 : opts.cam >= 2 ? 1 : 0.6; // (the cockpit has its own windscreen)
   let n = weather.rain * 48 * inside * dt * (spd > 25 ? 1.6 : 1);
   while (n > 0 && drops.length < 260){ if (rnd() < n) drops.push({ x: rnd() * W, y: rnd() * H, r: 2.5 + rnd() * rnd() * 12, life: 1.5 + rnd() * 3, max: 0, slide: rnd() < 0.35, vy: 0 }); n -= 1; }
   for (let i = drops.length - 1; i >= 0; i--){
@@ -5144,7 +5247,13 @@ addEventListener('resize', () => {
 // =====================================================================================================
 // THE GAME: money, upgrades, wanted stars (all saved), near-miss payouts, crashes, repairs, shops, camera, controls
 // =====================================================================================================
-const SAVE_KEY = 'nd-save-v1';
+// players: each has their own save on this device ('PLAYER 1' keeps the original save). A save can be exported to a file
+// or a code and loaded on any other phone, tablet or computer
+const LS_GET = k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, LS_SET = (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } };
+const PLAYER = (LS_GET('nd-player') || 'PLAYER 1').slice(0, 20);
+const PLAYERS = (() => { try { const a = JSON.parse(LS_GET('nd-players') || '[]'); return Array.isArray(a) && a.length ? a : ['PLAYER 1']; } catch (e) { return ['PLAYER 1']; } })();
+if (!PLAYERS.includes(PLAYER)) PLAYERS.push(PLAYER);
+const SAVE_KEY = PLAYER === 'PLAYER 1' ? 'nd-save-v1' : 'nd-save-v1:' + PLAYER;
 const STATE_DEFAULT = () => ({ cash: 3000, stars: 0, up: { engine: 0, turbo: 0, tyres: 0, brakes: 0, nitro: 0, armor: 0, tank: 0 }, ammo: 3, jammer: false, scanner: false, fuel: 1, paint: 0, earned: 0, odo: 0, busts: 0, escapes: 0, dest: null, trans: 'auto', assist: true });
 let STATE = STATE_DEFAULT();
 try { const raw = localStorage.getItem(SAVE_KEY); if (raw){ const o = JSON.parse(raw); STATE = Object.assign(STATE_DEFAULT(), o, { up: Object.assign(STATE_DEFAULT().up, o.up || {}) }); } } catch (e) {}
@@ -5224,7 +5333,9 @@ function scoring(dt){
   STATE.odo += Math.abs(car.vs) * dt; run.top = Math.max(run.top, kmh);
   if (kmh > 110){ run.frac += (kmh - 110) * 0.045 * run.mult * dt; if (run.frac >= 1){ const k = Math.floor(run.frac); run.frac -= k; STATE.cash += k; STATE.earned += k; } }
   const beta = Math.abs(Math.atan2(car.vy, Math.max(Math.abs(car.vx), 0.1)));
-  if (kmh > 45 && beta > 0.22 && run.crashCool <= 0){ run.drift += (beta * 6 + kmh * 0.06) * dt * run.mult; run.driftT += dt; }
+  const onMt = car.sup && car.sup.e && car.sup.e.cls === 'mt', onDrift = onMt && car.sup.e.gen === 'drift', dmul = onDrift ? 2 : onMt ? 1.35 : 1; // drifting pays more up the mountains, double on the drift road
+  if (onDrift && !run.onDrift) toast('MIDNIGHT DRIFT ROAD', 'DRIFT POINTS ×2 · LINK THE BENDS', '#ff9a1a'); run.onDrift = onDrift;
+  if (kmh > 45 && beta > 0.22 && run.crashCool <= 0){ run.drift += (beta * 6 + kmh * 0.06) * dt * run.mult * dmul; run.driftT += dt; }
   else if (run.driftT > 0){ if (run.drift > 12 && run.driftT > 0.6){ addCash(run.drift); run.mult = Math.min(12, run.mult + 0.2); run.combo = COMBO; popup('DRIFT', run.drift, 'close'); } run.drift = 0; run.driftT = 0; }
   run.combo = Math.max(0, run.combo - dt * (kmh < 60 ? 3 : 1));
   if (run.combo <= 0 && run.mult > 1) run.mult = Math.max(1, run.mult - 0.8 * dt);
@@ -5394,7 +5505,7 @@ function collideMovers(){
 // ---------- camera: chase, far chase, hood, bumper. Hold Q to look back over your car
 const cam = { yaw: 0, pos: new THREE.Vector3(), look: new THREE.Vector3(), shake: 0, init: false };
 const ORB = { yaw: 0, pitch: 0, zoom: 0, drag: null, idle: 9 };
-const CAMS = ['CHASE', 'FAR CHASE', 'HOOD', 'BUMPER', 'COCKPIT'];
+const CAMS = ['CHASE', 'FAR CHASE', 'HOOD', 'BUMPER', 'COCKPIT', 'COCKPIT WIDE']; // the wide one sits further back, with more of the road in view
 function updateCamera(dt){
   const spd = Math.hypot(car.vx, car.vy);
   const velH = car.h + Math.atan2(car.vy, Math.max(Math.abs(car.vx), 0.1));
@@ -5413,12 +5524,12 @@ function updateCamera(dt){
     if (!cam.init){ cam.pos.set(dx, dy, dz); cam.init = true; }
     cam.pos.x = lerp(cam.pos.x, dx, Math.min(1, dt * 13)); cam.pos.z = lerp(cam.pos.z, dz, Math.min(1, dt * 13));
     cam.pos.y = lerp(cam.pos.y, Math.max(dy, car.y + 1.4), Math.min(1, dt * 6));
-  } else if (opts.cam === 4){ // the driver's seat: your head leans into the corners and looks a little where you're steering
+  } else if (opts.cam >= 4){ // the driver's seat: your head leans into the corners and looks a little where you're steering
     CP.look = lerp(CP.look, clamp(car.steerIn * 0.1 + car.r * 0.06, -0.22, 0.22), Math.min(1, dt * 2.5)); CP.sway = lerp(CP.sway, clamp(-car.ayF * 0.0022, -0.045, 0.045), Math.min(1, dt * 4));
     player.updateMatrixWorld(true); const E = CP.EYE;
-    cam.pos.copy(pBody.localToWorld(new THREE.Vector3(E.x + CP.sway, E.y + clamp(-car.axF * 0.0006, -0.02, 0.02), E.z)));
+    const wide = opts.cam === 5 ? 1 : 0; cam.pos.copy(pBody.localToWorld(new THREE.Vector3(E.x + CP.sway - wide * 0.06, E.y + clamp(-car.axF * 0.0006, -0.02, 0.02) + wide * 0.07, E.z - wide * 0.24)));
     const hy = CP.look + clamp(angWrap(ORB.yaw), -1.7, 1.7), hp = clamp(ORB.pitch, -0.5, 0.6); // turn your head
-    look = pBody.localToWorld(new THREE.Vector3(E.x + CP.sway * 0.5 + Math.sin(hy) * 12, E.y - 0.3 + hp * 10, E.z + Math.cos(hy) * 12)); cam.yaw = car.h;
+    look = pBody.localToWorld(new THREE.Vector3(E.x + CP.sway * 0.5 + Math.sin(hy) * 12 - wide * 0.06, E.y - 0.3 + hp * 10, E.z + Math.cos(hy) * 12)); cam.yaw = car.h;
   } else {
     const fxc = Math.sin(car.h), fzc = Math.cos(car.h), fwd = opts.cam === 2 ? 0.55 : 2.35, hgt = opts.cam === 2 ? 1.2 : 0.55;
     cam.pos.set(car.x + fxc * fwd, car.y + hgt, car.z + fzc * fwd);
@@ -5430,9 +5541,9 @@ function updateCamera(dt){
   camera.position.x += (Math.random() - 0.5) * sh; camera.position.y += (Math.random() - 0.5) * sh;
   camera.lookAt(look);
   if (keys.KeyQ && started){ player.updateMatrixWorld(true); camera.position.copy(player.localToWorld(new THREE.Vector3(0.8, 2.2, 6.2))); camera.lookAt(player.localToWorld(new THREE.Vector3(0, 0.8, -6))); }
-  const near = opts.cam === 4 ? 0.08 : 0.3; if (camera.near !== near){ camera.near = near; camera.updateProjectionMatrix(); }
-  document.body.classList.toggle('cockpit', opts.cam === 4); sfx.cabin(opts.cam === 4 ? 1 : opts.cam === 2 ? 0.35 : 0);
-  const fov = (opts.cam === 4 ? 64 : 58) + clamp(spd * 3.6 - 60, 0, 240) * (opts.cam === 4 ? 0.035 : 0.07) + (car.nosOn ? 9 : 0) + (car.rocketOn ? 14 : 0);
+  const near = opts.cam >= 4 ? 0.08 : 0.3; if (camera.near !== near){ camera.near = near; camera.updateProjectionMatrix(); }
+  document.body.classList.toggle('cockpit', opts.cam >= 4); sfx.cabin(opts.cam >= 4 ? 1 : opts.cam === 2 ? 0.35 : 0);
+  const fov = opts.cam >= 4 ? cockpitFov(camera.aspect, spd) + (opts.cam === 5 ? 16 : 0) + (car.nosOn ? 6 : 0) + (car.rocketOn ? 10 : 0) : 58 + clamp(spd * 3.6 - 60, 0, 240) * 0.07 + (car.nosOn ? 9 : 0) + (car.rocketOn ? 14 : 0);
   if (Math.abs(camera.fov - fov) > 0.05){ camera.fov = lerp(camera.fov, fov, Math.min(1, dt * 3)); camera.updateProjectionMatrix(); }
   sky.position.copy(camera.position); stars.position.copy(camera.position);
 }
@@ -5450,7 +5561,7 @@ const CONTROLS = [
   ['R', 'Back onto the nearest road, wherever you are (out of fuel and stopped: call a tow, $250)', 'respawn stuck tow fuel off road forest'], ['OFF ROAD', 'Nothing stops you leaving the road: fields, forests, hillsides. Expressways, ramps, country roads, mountain roads and every bridge have guard rails, with gaps at junctions and gas stations. Lanes, dirt tracks and city streets are open: drive off them into fields and forests. Grass is slow and slippery, trees are solid, a long drop hurts', 'off road forest grass field'],
   ['FUEL', 'Your car burns fuel, faster at full throttle. Fill up in any green service box at a gas station or shop ($3 a litre, half price in Hokuto, Kitahama and Nohara)', 'gas fuel petrol tank refuel'],
   ['TOWNS', 'Ten towns and four high mountain villages sell parts the cities don\'t. Their garages are hidden down side streets. The harder a place is to reach, the better its stock: level 3 parts, the jammer, the scanner, respray', 'towns villages shop parts level 3 upgrades'], ['THE STORY', 'Somewhere at the end of a forgotten road lives the Lore Keeper. Listen at the counters of the town garages: people talk. He has a story to pass on, and it is the goal of the game', 'story lore keeper goal chapter'], ['SEA OF TREES', 'In the north-west lies 樹海, the Sea of Trees: a vast old forest full of unmarked trails. Your GPS and minimap lose their signal inside, and the trails only appear on your map once you have driven them. Strange things wait at the ends of some trails, and something special at its heart. Stone lanterns at the forks may help', 'forest jukai sea of trees biome trails secret lost'], ['THE JOB', 'A fixer in the NAGISA tune shop has work for a driver with nerve: steal a prototype, get a fake licence, get past the border posts. Press I to look at your licence. While you are carrying the crate, police know your colour: respray at any garage ($1,500) before a border, and remember border posts run your ID after you pass', 'heist steal job quest licence id border respray'], ['SECRETS', 'Ask the old man in TENGU, the highest village, about the secret map. Secret places at the ends of lonely roads hold paints, underglow, rims, a wing and level 4 parts', 'secret map quest tengu hidden'], ['G', 'Automatic or manual gearbox', 'gears transmission'], ['Z / E', 'Shift down / up (manual gearbox)', 'gears'], ['T', 'Assists on / off', 'traction stability'],
-  ['K', 'Fog on / off', 'weather mist'], ['O', 'Rain on / off (it also comes on its own, now and then)', 'weather wet water'], ['B', 'Blackout on / off', 'power lights dark'],
+  
   ['Y', 'Radio on / off', 'music radio song'], ['N', 'Mute all sound', 'audio volume sound'], ['P / ESC', 'Pause (Esc also closes the map or shop)', 'menu stop'], ['/', 'This controls list', 'help commands keys'],
   ['POLICE', 'Police leave you alone unless they see you break the law: speeding past one (or hitting one) makes you wanted. Once wanted, any unit that sees you gives chase. Get 300 m away from a unit and it gives up; lose them all: escaped, +½ wanted star. Your wanted level wears off by ½ star every 2 minutes while nobody is chasing you. From 4 stars there is a tracker on your car: every 30 s the police get your position and the nearest units come for you. Busted clears your stars but costs a fine', 'cops wanted stars chase escape busted tracker'],
 ];
@@ -5465,9 +5576,6 @@ function closeHelp(){ helpOpen = false; $('help').hidden = true; if (started){ p
 $('helpSearch').addEventListener('input', renderHelp);
 $('helpClose').addEventListener('click', closeHelp);
 $('helpBtn').addEventListener('click', e => { e.currentTarget.blur(); openHelp(); });
-$('fogBtn').addEventListener('click', e => { e.currentTarget.blur(); setFog(weather.fogTarget === 0); });
-$('boBtn').addEventListener('click', e => { e.currentTarget.blur(); setBlackout(weather.powerTarget > 0.5); });
-$('rainBtn').addEventListener('click', e => { e.currentTarget.blur(); setRain(weather.target === 0); });
 function toggleRadio(){ sfx.init(); sfx.resume(); const on = sfx.radio(!sfx.radioOn); $('radioBtn').classList.toggle('on', on); toast(on ? 'NIGHT FM 88.3' : 'RADIO OFF', on ? 'NOW PLAYING · NIGHT DRIVE' : '', '#7fe3ff'); }
 $('radioBtn').addEventListener('click', e => { e.currentTarget.blur(); toggleRadio(); });
 addEventListener('keydown', e => {
@@ -5482,12 +5590,9 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyM'){ openMap(); return; }
   if (e.code === 'KeyC'){ opts.cam = (opts.cam + 1) % CAMS.length; popup('CAMERA · ' + CAMS[opts.cam], 0, 'near'); }
   if (e.code === 'KeyR'){ if (car.fuel <= 0 && Math.hypot(car.vx, car.vy) < 2) towForFuel(); else resetCar(); }
-  if (e.code === 'KeyK') setFog(weather.fogTarget === 0);
-  if (e.code === 'KeyO') setRain(weather.target === 0);
   if (e.code === 'KeyY') toggleRadio();
   if (e.code === 'KeyH'){ sfx.horn(); yieldAhead(); }
   if (e.code === 'KeyL'){ highBeam = !highBeam; if (highBeam) yieldAhead(); flags(); }
-  if (e.code === 'KeyB') setBlackout(weather.powerTarget > 0.5);
   if (e.code === 'KeyN') toggleMute();
   if (e.code === 'KeyG'){ opts.auto = !opts.auto; STATE.trans = opts.auto ? 'auto' : 'manual'; flags(); }
   if (e.code === 'KeyT'){ opts.assist = !opts.assist; STATE.assist = opts.assist; flags(); }
@@ -5556,6 +5661,16 @@ function resetCar(){ // R: back onto the nearest road, facing along it
   run.combo = 0; run.mult = 1; car.fall = 0; car.wet = false; popup('BACK ON THE ROAD', 0, 'near');
   for (const c of traffic){ if (c.mode !== 'park' && Math.hypot(c.x - car.x, c.z - car.z) < 35) parkCar(c); }
 }
+
+// ---------- saves you can carry between devices: a file, or a code to paste
+const saveBlob = () => JSON.stringify({ game: 'night-driver', v: 1, player: PLAYER, at: new Date().toISOString(), state: STATE });
+const toCode = s => 'ND1-' + btoa(unescape(encodeURIComponent(s)));
+function readSave(txt){ // a file's contents or a pasted code -> a state, or null
+  try { txt = String(txt).trim(); if (txt.startsWith('ND1-')) txt = decodeURIComponent(escape(atob(txt.slice(4).replace(/\s+/g, ''))));
+    const o = JSON.parse(txt); const st = o && o.game === 'night-driver' ? o.state : o; return st && typeof st === 'object' && typeof st.cash === 'number' ? st : null; } catch (e) { return null; } }
+function loadSaveState(st){ STATE = Object.assign(STATE_DEFAULT(), st, { up: Object.assign(STATE_DEFAULT().up, st.up || {}) }); saveState(); location.reload(); }
+function switchPlayer(name){ name = String(name || '').trim().toUpperCase().slice(0, 20); if (!name) return; saveState(); if (!PLAYERS.includes(name)) PLAYERS.push(name); LS_SET('nd-players', JSON.stringify(PLAYERS)); LS_SET('nd-player', name); location.reload(); }
+LS_SET('nd-players', JSON.stringify(PLAYERS));
 // =====================================================================================================
 // THE SEA OF TREES (樹海): trailhead signs, stone lanterns that quietly point the way to the heart, fireflies, strange
 // things at the dead ends and the great cedar at the heart. Inside, the GPS loses its signal and the trails only
@@ -5750,7 +5865,7 @@ const LORE = [
       'So they agreed on the Long Run, and that night every police car in the country was out looking for them.',
       'Akari kept a notebook. Some of its pages are still out there, if you know when to look.'],
     spots: [
-      { id: 'light', at: () => landmarkAt('LIGHTHOUSE'), name: 'THE LIGHTHOUSE', cond: 'rain', hint: 'The door is locked tight. The keeper said the lighthouse only talks in the rain. (Press O to call the rain.)',
+      { id: 'light', at: () => landmarkAt('LIGHTHOUSE'), name: 'THE LIGHTHOUSE', cond: 'rain', hint: 'The door is locked tight. The keeper said the lighthouse only talks in the rain. (Rain comes and goes on its own: come back when it is pouring.)',
         page: ['In the rain the keeper\'s door swings open. Inside, a page in small neat writing:', '"If I lose him in the hills I\'ll take the coast road. The beam will bring me home."', 'The page is dry. Someone put it here recently.'] },
       { id: 'obs', at: () => landmarkAt('MOUNTAIN OBSERVATORY'), name: 'THE OBSERVATORY', cond: 'night', hint: 'The dome is shut. Astronomers only work in the dead of night, between 22:00 and 04:00.',
         page: ['The night log, open on the desk at the same night twenty years ago:', '"02:14. Two sets of headlights on the mountain road. One stops at the summit. The other turns back."', 'Turns back?'] } ] },
@@ -6239,7 +6354,6 @@ function updateHud(dt){
     if (STATE.dest && inJukai()){ g.hidden = false; g.textContent = 'GPS · NO SIGNAL · 樹海 · FIND YOUR OWN WAY OUT'; }
     else if (STATE.dest){ g.hidden = false; const n = gps.next; g.textContent = 'GPS → ' + destLabel() + ' · ' + (gps.total / 1000).toFixed(1) + ' km' + (n ? '  ·  ' + (n.dist < 1000 ? Math.round(n.dist / 10) * 10 + ' m' : (n.dist / 1000).toFixed(1) + ' km') + ': ' + n.what + (n.what === 'TURN LEFT' || n.what === 'TURN RIGHT' || n.what === 'TAKE THE EXIT' ? ' → ' : ' ') + n.onto : ''); }
     else g.hidden = true; }
-  $('fogBtn').classList.toggle('on', weather.fogTarget > 0); $('boBtn').classList.toggle('on', weather.powerTarget < 0.5); $('rainBtn').classList.toggle('on', weather.target > 0);
   { const lim = speedLimitAt(), el = $('limit'); if (el.textContent !== String(lim)) el.textContent = lim; el.classList.toggle('over', kmh > lim * 1.2); }
   drawAhead();
   drawMinimap();
@@ -6547,6 +6661,17 @@ $('go').addEventListener('click', () => {
   spawnAt(START_STATION);
   toast('NIGHT DRIVER', 'E1 CENTRAL EXPRESSWAY · PULL OUT AND HEAD NORTH · M FOR THE MAP', '#7fe3ff');
 });
+// players and saves
+{ const sel = $('playerSel'); for (const n of PLAYERS){ const o = document.createElement('option'); o.value = o.textContent = n; if (n === PLAYER) o.selected = true; sel.appendChild(o); }
+  sel.addEventListener('change', () => switchPlayer(sel.value));
+  $('newPlayer').addEventListener('click', () => { const n = prompt('Name for the new player (their own save, starting fresh):'); if (n) switchPlayer(n); });
+  const hint = t => { $('saveHint').textContent = t; };
+  $('expFile').addEventListener('click', () => { saveState(); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([saveBlob()], { type: 'application/json' })); a.download = 'Night-Driver-save-' + PLAYER.replace(/[^A-Z0-9]+/gi, '-') + '.json'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); hint('Saved to a file. Open the game on the other device and press LOAD FILE.'); });
+  $('expCode').addEventListener('click', async () => { saveState(); const code = toCode(saveBlob()); let ok = false; try { await navigator.clipboard.writeText(code); ok = true; } catch (e) {} if (!ok) prompt('Copy this save code:', code); hint(ok ? 'Save code copied. On the other device press PASTE CODE and paste it.' : 'Copy the code from the box, then PASTE CODE on the other device.'); });
+  $('impFile').addEventListener('click', () => $('impInput').click());
+  $('impInput').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { const st = readSave(r.result); if (!st){ hint('That file isn\'t a Night Driver save.'); return; } if (confirm('Load this save into ' + PLAYER + '? It replaces ' + PLAYER + '\'s current progress.')) loadSaveState(st); }; r.readAsText(f); });
+  $('impCode').addEventListener('click', () => { const t = prompt('Paste a save code (it starts with ND1-):'); if (!t) return; const st = readSave(t); if (!st){ hint('That code didn\'t work. Copy the whole code and try again.'); return; } if (confirm('Load this save into ' + PLAYER + '? It replaces ' + PLAYER + '\'s current progress.')) loadSaveState(st); });
+}
 $('wipe').addEventListener('click', () => { if (!confirm('Wipe your saved cash, upgrades and wanted level and start over?')) return; STATE = STATE_DEFAULT(); applyUpgrades(); saveState(); setPaint(0); saveLine(); });
 function toggleMute(){ sfx.setMuted(!sfx.muted); muteLabel(); }
 function muteLabel(){ for (const b of [$('muteBtn'), $('pauseMute')]){ b.textContent = sfx.muted ? 'SOUND OFF' : 'SOUND ON'; b.classList.toggle('off', sfx.muted); b.setAttribute('aria-pressed', String(sfx.muted)); } }
@@ -6589,6 +6714,7 @@ function frame(now){
   watchQuality(rawDt);
   stepGame(dt);
   if (composer && quality.bloom) composer.render(); else renderer.render(scene, camera);
+  drawMirror();
 }
 function stepGame(dt){
   simT += dt; car.graceT = Math.max(0, (car.graceT || 0) - dt);
@@ -6666,6 +6792,19 @@ function cluePinMark(g, toXY, big){
   g.fillStyle = '#ffffff'; g.beginPath(); g.arc(px, py - 17 * k, 3.5 * k, 0, TAU); g.fill();
   if (big){ g.fillStyle = '#e8d6ff'; g.font = '800 12px "Chakra Petch", sans-serif'; g.textAlign = 'left'; g.fillText('RIDDLE ' + STATE.quest + ' · STOP AT THE END OF THIS TRACK', px + 14, py - 14); }
 }
+
+// ---------- the rear-view mirror strip at the top of the screen: a camera on the roof looking back, shown flipped like a
+// real mirror. B turns it off and on
+const VM = { on: true, rt: new THREE.WebGLRenderTarget(640, 152), cam: new THREE.PerspectiveCamera(40, 640 / 152, 0.5, 900), scene: new THREE.Scene(), ocam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1) };
+try { VM.on = localStorage.getItem('nd-vmir') !== '0'; } catch (e) {}
+VM.cam.position.set(0, 1.6, -1.0); player.add(VM.cam); VM.rt.texture.wrapS = THREE.RepeatWrapping; VM.rt.texture.repeat.x = -1; VM.rt.texture.offset.x = 1;
+VM.scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: VM.rt.texture, depthTest: false })));
+addEventListener('keydown', e => { if (e.code === 'KeyB' && !e.repeat && started && !(e.target && e.target.tagName === 'INPUT')){ VM.on = !VM.on; try { localStorage.setItem('nd-vmir', VM.on ? '1' : '0'); } catch (er) {} toast(VM.on ? 'MIRROR ON' : 'MIRROR OFF', 'B', '#9fd6ff'); } });
+function drawMirror(){ const el = $('vmir'), show = VM.on && started && !paused; if (el.hidden === show) el.hidden = !show; if (!show) return;
+  const b = el.getBoundingClientRect(); if (b.width < 10) return;
+  VM.cam.updateMatrixWorld(); const keep = renderer.getRenderTarget(); renderer.setRenderTarget(VM.rt); renderer.render(scene, VM.cam); renderer.setRenderTarget(keep);
+  const ac = renderer.autoClear; renderer.autoClear = false; renderer.setViewport(b.left + 3, innerHeight - b.bottom + 3, b.width - 6, b.height - 6); renderer.setScissor(b.left + 3, innerHeight - b.bottom + 3, b.width - 6, b.height - 6); renderer.setScissorTest(true);
+  renderer.render(VM.scene, VM.ocam); renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight); renderer.autoClear = ac; }
 // =====================================================================================================
 // PERFORMANCE: things load in near you and drop out far away, without changing what you can see.
 // 1. Static scenery is only drawn while it's inside the distance the night mist (or rain, or the forest) lets you see.
