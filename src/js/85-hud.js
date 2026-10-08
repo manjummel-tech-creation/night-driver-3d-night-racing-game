@@ -479,9 +479,11 @@ paintsEl.addEventListener('change', e => { if (heistLock()){ setPaint(STATE.pain
 document.querySelectorAll('input[name=trans]').forEach(el => el.addEventListener('change', () => { opts.auto = $('tAuto').checked; STATE.trans = opts.auto ? 'auto' : 'manual'; flags(); }));
 document.querySelectorAll('input[name=assist]').forEach(el => el.addEventListener('change', () => { opts.assist = $('aOn').checked; STATE.assist = opts.assist; flags(); }));
 function saveLine(){ const s = STATE; $('saveLine').innerHTML = `SAVED: <b>$${Math.round(s.cash).toLocaleString()}</b> · WANTED <i>${starText(s.stars)}</i> · UPGRADES ${Object.values(s.up).reduce((a, b) => a + b, 0)}/21 · ${(s.odo / 1000).toFixed(0)} km DRIVEN · STORY: ${STATE.lore && STATE.lore.complete ? 'COMPLETE' : STATE.lore && STATE.lore.found ? 'CHAPTER ' + STATE.lore.ch + ' / ' + LORE.length : 'NOT STARTED'}`; }
+let backFromMenu = false; // came to the menu mid-drive (from pause): carry on from the same spot
 $('go').addEventListener('click', () => {
   sfx.init(); sfx.resume();
   started = true; $('menu').hidden = true; $('hud').hidden = false; cam.init = false;
+  if (backFromMenu){ backFromMenu = false; $('go').textContent = 'Start at the gas station'; toast(CAR_MODELS[CARV.id].name, 'BACK ON THE ROAD', '#7fe3ff'); return; }
   run.mult = 1; run.combo = 0; run.crashes = 0; car.damage = 0; car.nitro = 1; car.fuel = Math.max(0.25, STATE.fuel ?? 1);
   spawnAt(START_STATION);
   toast('NIGHT DRIVER', 'E1 CENTRAL EXPRESSWAY · PULL OUT AND HEAD NORTH · M FOR THE MAP', '#7fe3ff');
@@ -505,6 +507,13 @@ $('muteBtn').addEventListener('click', e => { toggleMute(); e.currentTarget.blur
 muteLabel();
 function setPaused(v){ if (!started || mapOpen) return; paused = v; $('pause').hidden = !v; if (!v){ sfx.resume(); last = performance.now(); } }
 $('resume').addEventListener('click', () => setPaused(false));
+// back to the main menu mid-game (change car, paint, players, online), then carry on from where you stopped
+$('toMenu').addEventListener('click', () => {
+  if (chase.on){ toast('NOT WHILE THE POLICE ARE ON YOU', 'LOSE THEM FIRST', '#ff3d6e'); return; }
+  saveState(); setPaused(false); started = false; backFromMenu = true; car.vx = car.vy = car.r = 0;
+  if (shopOpenFor) closeShop(); $('hud').hidden = true; $('menu').hidden = false; $('go').textContent = 'Back to driving';
+  { const r = $('car-' + CARV.id); if (r) r.checked = true; } saveLine && saveLine();
+});
 renderer.domElement.style.cursor = 'crosshair';
 // the mouse on the road: drag to look around the car (any button), scroll to zoom, a quick click (no drag) shoots
 renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());

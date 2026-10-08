@@ -136,16 +136,16 @@ function stations(dt){
     if (bayT >= need && near.kind === 'fuel'){ // a mountain fuel stop: up to a third of a tank, and your checkpoint
       car.bayDone = near; bayT = 0; el.hidden = true; const msg = topUp(near, 1 / 3); STATE.checkpoint = near.place.id; popup(msg, 0, 'near'); popup('CHECKPOINT · ' + near.place.name, 0, 'near'); sfx.beep(1100); saveState();
     } else if (bayT >= need){
-      car.damage = 0; car.flat = 0; run.crashes = 0; car.nitro = 1; car.bayDone = near; bayT = 0; el.hidden = true;
-      const fuelMsg = refuel(near);
-      if (near.kind === 'shop'){ openShop(near); sfx.beep(1320); popup(fuelMsg, 0, 'near'); }
-      else { STATE.ammo = Math.max(STATE.ammo, Math.min(5, STATE.ammo + 1)); popup('REPAIRED · NITRO FULL · +1 BULLET', 0, 'near'); popup(fuelMsg, 0, 'near'); sfx.beep(990); saveState(); }
+      car.damage = 0; car.flat = 0; run.crashes = 0; car.bayDone = near; bayT = 0; el.hidden = true;
+      if (near.kind === 'shop'){ openShop(near); sfx.beep(1320); popup('REPAIRED · FUEL AND NITRO AT A GAS STATION', 0, 'near'); } // upgrade bays don't fill you up any more
+      else { car.nitro = 1; const fuelMsg = refuel(near);
+        STATE.ammo = Math.max(STATE.ammo, Math.min(5, STATE.ammo + 1)); popup('REPAIRED · NITRO FULL · +1 BULLET', 0, 'near'); popup(fuelMsg, 0, 'near'); sfx.beep(990); saveState(); }
     }
   } else {
     bayT = 0;
     if (!b.inside) car.bayDone = car.bayDone === near && Math.abs(b.along) > 14 ? null : car.bayDone;
     if (shopOpenFor && (!b.inside || kmh > 12)) closeShop();
-    const needs = near.kind === 'fuel' ? car.fuel < 0.33 : near.kind === 'shop' || car.damage > 0.02 || car.nitro < 0.95 || run.crashes > 0 || car.flat;
+    const needs = near.kind === 'fuel' ? car.fuel < 0.33 : near.kind === 'shop' || car.fuel < 0.98 || car.damage > 0.02 || car.nitro < 0.95 || run.crashes > 0 || car.flat;
     if (onPad && car.bayDone !== near && needs){ const diff = -b.along; el.hidden = false; el.innerHTML = (near.kind === 'shop' ? 'UPGRADE BAY' : near.kind === 'fuel' ? 'FUEL STOP · ⅓ TANK' : 'GREEN REPAIR BOX') + '<b>' + Math.round(Math.abs(diff)) + ' m ' + (diff > 0 ? 'AHEAD' : 'BEHIND') + '</b><span style="font-size:10px">stop inside it for ' + (near.kind === 'shop' ? 'a second' : near.kind === 'fuel' ? '2 seconds' : '5 seconds') + '</span>'; }
     else el.hidden = true;
   }
