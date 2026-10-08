@@ -2371,16 +2371,15 @@ function treeSpots(ch, cx, cz){ // deterministic per chunk
   }
   return out;
 }
-function placeTrees(ch, cx, cz){
-  if (!freeBlocks.length) return;
-  const b = freeBlocks.pop(); ch.block = b;
+function placeTrees(ch, cx, cz, far){ // far: out in the mist only every third tree is drawn; the rest fill in as you come closer
+  let b = ch.block; if (b === undefined){ if (!freeBlocks.length) return; b = freeBlocks.pop(); } ch.block = b; ch.treeFar = !!far;
   const spots = treeSpots(ch, cx, cz), dm = new THREE.Object3D();
   ch.trees = []; for (const k of ['pine', 'leaf']) for (const t of spots[k].slice(0, TREE_K)) ch.trees.push(t[0], t[2]); // trunk positions, for driving into the forest
   for (const k of ['pine', 'leaf']){
     const T2 = TREES[k], list = spots[k];
     for (let n = 0; n < TREE_K; n++){
       const slot = b * TREE_K + n;
-      if (n < list.length){ const [x, y, z, sc, ry, cv] = list[n];
+      if (n < list.length && (!far || n % 3 === 0)){ const [x, y, z, sc, ry, cv] = list[n];
         dm.position.set(x, y - 0.3, z); dm.rotation.set(0, ry, 0); dm.scale.set(sc, sc * (0.85 + cv * 0.5), sc); dm.updateMatrix();
         T2.crown.setMatrixAt(slot, dm.matrix); T2.trunk.setMatrixAt(slot, dm.matrix);
         if (list[n][6]) _tc.setRGB(0.025 + cv * 0.02, 0.06 + cv * 0.04, 0.04 + cv * 0.02); else if (k === 'pine') _tc.setRGB(0.05 + cv * 0.03, 0.1 + cv * 0.05, 0.07 + cv * 0.03); else if (ruralK(z) > 0.5) _tc.setRGB(0.1 + cv * 0.05, 0.16 + cv * 0.05, 0.06); else _tc.setRGB(0.09 + cv * 0.04, 0.13 + cv * 0.06, 0.05);
@@ -2389,17 +2388,30 @@ function placeTrees(ch, cx, cz){
     }
     const top = (Math.max(...[...chunks.values()].map(c2 => c2.block ?? -1), b) + 1) * TREE_K;
     T2.crown.count = T2.trunk.count = top;
-    T2.crown.instanceMatrix.needsUpdate = T2.trunk.instanceMatrix.needsUpdate = true; T2.crown.instanceColor.needsUpdate = true;
+    treeDirty(b);
   }
+}
+// only the blocks that changed go to the graphics card (the whole forest buffer is ~14 MB: sending all of it froze the
+// game for a fifth of a second every time trees appeared, which at speed looked like the car skipping forward)
+const TREE_DIRTY = { lo: Infinity, hi: -1 };
+function treeDirty(b){ TREE_DIRTY.lo = Math.min(TREE_DIRTY.lo, b); TREE_DIRTY.hi = Math.max(TREE_DIRTY.hi, b); }
+function flushTrees(){
+  if (TREE_DIRTY.hi < 0) return; const off = TREE_DIRTY.lo * TREE_K, cnt = (TREE_DIRTY.hi - TREE_DIRTY.lo + 1) * TREE_K;
+  for (const k of ['pine', 'leaf']){ const T2 = TREES[k];
+    for (const a of [T2.crown.instanceMatrix, T2.trunk.instanceMatrix]){ a.updateRange.offset = off * 16; a.updateRange.count = cnt * 16; a.needsUpdate = true; }
+    const c = T2.crown.instanceColor; if (c){ c.updateRange.offset = off * 3; c.updateRange.count = cnt * 3; c.needsUpdate = true; } }
+  TREE_DIRTY.lo = Infinity; TREE_DIRTY.hi = -1;
+  let top = 0; for (const c2 of chunks.values()) if (c2.block !== undefined) top = Math.max(top, c2.block + 1); // draw only up to the last block in use
+  for (const k of ['pine', 'leaf']) TREES[k].crown.count = TREES[k].trunk.count = top * TREE_K;
 }
 function freeTrees(ch){
   if (ch.block === undefined) return;
-  for (const k of ['pine', 'leaf']){ const T2 = TREES[k]; for (let n = 0; n < TREE_K; n++){ const slot = ch.block * TREE_K + n; T2.crown.setMatrixAt(slot, ZERO_M); T2.trunk.setMatrixAt(slot, ZERO_M); } T2.crown.instanceMatrix.needsUpdate = T2.trunk.instanceMatrix.needsUpdate = true; }
-  freeBlocks.push(ch.block); ch.block = undefined; ch.trees = null;
+  for (const k of ['pine', 'leaf']){ const T2 = TREES[k]; for (let n = 0; n < TREE_K; n++){ const slot = ch.block * TREE_K + n; T2.crown.setMatrixAt(slot, ZERO_M); T2.trunk.setMatrixAt(slot, ZERO_M); } }
+  treeDirty(ch.block); freeBlocks.push(ch.block); freeBlocks.sort((a, b) => b - a); ch.block = undefined; ch.trees = null; // lowest blocks get reused first, so no empty slots are drawn
 }
 const TREE_R = 1450;
 // load what's near, drop what's far; at most `budget` new chunks per call
-function updateChunks(px, pz, budget){ const treeR = Math.min(TREE_R - 800 * (weather.jk || 0), 2.4 / Math.max(1e-4, scene.fog.density) + 250); // in the misty sea of trees you can't see far anyway, so trees stop sooner
+function updateChunks(px, pz, budget){ const treeR = Math.min(TREE_R - 800 * (weather.jk || 0), 0.6 * 2.4 / Math.max(1e-4, scene.fog.density) + 100), treeNear = Math.min(650, treeR * 0.55); // in the misty sea of trees you can't see far anyway, so trees stop sooner
 
   const cx0 = Math.floor(px / CH), cz0 = Math.floor(pz / CH), R = Math.ceil(CH_R / CH);
   const want = [];
@@ -2409,16 +2421,17 @@ function updateChunks(px, pz, budget){ const treeR = Math.min(TREE_R - 800 * (we
     want.push([d, cx, cz]);
   }
   want.sort((a, b) => a[0] - b[0]);
-  let made = 0;
+  let made = 0, treeOps = 0;
   for (const [d, cx, cz] of want){
     const key = cx * 100000 + cz; let ch = chunks.get(key);
     if (!ch){ if (made >= budget) continue; ch = buildChunk(cx, cz); chunks.set(key, ch); made++; }
     ch.seen = true;
-    if (d < treeR && ch.block === undefined && made < budget + 2){ placeTrees(ch, cx, cz); made += 0.5; }
-    else if (d > treeR + 300 && ch.block !== undefined) freeTrees(ch);
+    if (d < treeR && ch.block === undefined && made < budget + 2 && (treeOps < 1 || budget > 50)){ placeTrees(ch, cx, cz, d > treeNear); made += 0.5; treeOps++; } // one block of trees a frame while driving
+    else if (ch.block !== undefined && ch.treeFar && d < treeNear - 50 && (treeOps < 1 || budget > 50)){ placeTrees(ch, cx, cz, false); treeOps++; } // coming closer: fill in the rest
+    else if (d > treeR + 300 && ch.block !== undefined && (treeOps < 1 || budget > 50)){ freeTrees(ch); treeOps++; }
   }
   for (const [key, ch] of chunks){ if (!ch.seen){ freeTrees(ch); scene.remove(ch.mesh); ch.mesh.geometry.dispose(); chunks.delete(key); } ch.seen = false; }
-  return made;
+  flushTrees(); return made;
 }
 // fix the chunk-local height lookup: H has (N + 2) per row where N = CH_N + 1
 function chunkH(ch, i, j){ return ch.H[(j + 1) * (CH_N + 3) + i + 1]; }
@@ -3194,7 +3207,7 @@ function buildSuburb(S){
 // SECRETS: hidden garages and caches at the end of a few of the many dead ends. Nothing marks them on the map
 // until you own the secret map; even then you have to drive there. Each gives a reward once.
 // =====================================================================================================
-const REWARD_TEXT = { 'mod:ROCKET': 'ROCKET BOOSTER · HOLD F FOR A HUGE PUSH', 'mod:AERO': 'ACTIVE AERO KIT · FAR MORE GRIP AT SPEED', 'paint:JUKAI MOSS': 'JUKAI MOSS PAINT', 'paint:CHROME': 'CHROME PAINT', 'paint:MATTE BLACK': 'MATTE BLACK PAINT', 'paint:PEARL GOLD': 'PEARL GOLD PAINT', 'glow:CYAN': 'CYAN UNDERGLOW', 'glow:MAGENTA': 'MAGENTA UNDERGLOW', 'rims:GOLD': 'GOLD RIMS', 'rims:NEON': 'NEON RIMS', 'wing:GT': 'GT WING',
+const REWARD_TEXT = { 'fox:ON': 'KITSUNE-BI · FOX-FIRE', 'mod:ROCKET': 'ROCKET BOOSTER · HOLD F FOR A HUGE PUSH', 'mod:AERO': 'ACTIVE AERO KIT · FAR MORE GRIP AT SPEED', 'paint:JUKAI MOSS': 'JUKAI MOSS PAINT', 'paint:CHROME': 'CHROME PAINT', 'paint:MATTE BLACK': 'MATTE BLACK PAINT', 'paint:PEARL GOLD': 'PEARL GOLD PAINT', 'glow:CYAN': 'CYAN UNDERGLOW', 'glow:MAGENTA': 'MAGENTA UNDERGLOW', 'rims:GOLD': 'GOLD RIMS', 'rims:NEON': 'NEON RIMS', 'wing:GT': 'GT WING',
   'part:engine4': 'LEVEL 4 ENGINE (RACE BUILD)', 'part:tyres4': 'LEVEL 4 TYRES (SLICKS)', 'part:nitro4': 'LEVEL 4 NITRO (TWIN BOTTLES)', 'part:turbo4': 'LEVEL 4 TURBO (TWIN SCROLL)', 'cash:40000': '$40,000 IN A BAG', 'paint:KAGE BLACK': 'KAGE BLACK PAINT', 'glow:AKARI': 'AKARI UNDERGLOW', 'cash:75000': '$75,000 AND A ROCKET' };
 const SECRET_SPOTS = []; // { kind: 'secret' | 'clue', i, x, z, y, grp, F }
 function buildSecretSpot(S, kind, i){
@@ -3566,7 +3579,7 @@ const CAR_MODELS = {
   kaze: { name: 'KAZE 86', kind: 'LIGHT HATCH', desc: 'Tiny, light and twitchy. Slower in a straight line, the king of the mountain drift.', tq: 0.7, m: 1040, cd: 1.12, lat: 4, slide: 0.72, turn: 1.14, trac: 1.1,
     bars: { POWER: 4, 'TOP SPEED': 5, GRIP: 8, DRIFT: 10 }, wx: 0.72, wf: 1.22, wr: -1.2, ws: 0.92, lamp: [0.55, 0.52, 2.12] },
   oni: { name: 'ONI V12', kind: 'WEDGE SUPERCAR', desc: 'Huge power and the fastest on the highway. Heavy, so brake early in the hills.', tq: 1.5, m: 1680, cd: 0.84, lat: -2, slide: 1.15, turn: 0.92, trac: 1.5,
-    bars: { POWER: 10, 'TOP SPEED': 10, GRIP: 6, DRIFT: 5 }, wx: 0.88, wf: 1.45, wr: -1.42, ws: 1.05, lamp: [0.66, 0.5, 2.36] },
+    bars: { POWER: 10, 'TOP SPEED': 10, GRIP: 6, DRIFT: 5 }, wx: 0.8, wf: 1.45, wr: -1.42, ws: 1.05, lamp: [0.6, 0.57, 2.36] },
 };
 const CARV = { k: CAR_MODELS.raijin, id: 'raijin', body: pBody.children.find(o => o.name === 'car-raijin') };
 const carShape = (pts, depth, bevel) => { const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)){ if (p.length === 3) s.absarc(p[0], 0.3, p[2], Math.PI, 0, true); else s.lineTo(p[0], p[1]); }
@@ -3596,21 +3609,21 @@ const carShape = (pts, depth, bevel) => { const s = new THREE.Shape(); s.moveTo(
 (() => {
   const B = new THREE.Group(); B.name = 'car-oni'; B.visible = false; pBody.add(B);
   const add = (g, m, x, y, z) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); B.add(o); return o; };
-  B.add(new THREE.Mesh(carShape([[-2.3, 0.34], [-1.86, 0.3], [-1.42, 0, 0.44], [1.01, 0.3], [1.45, 0, 0.44], [2.25, 0.3], [2.42, 0.38], [2.36, 0.5], [1.1, 0.76], [-1.9, 0.9], [-2.34, 0.86]], 1.94, 0.06), pPaint));
-  B.add(new THREE.Mesh(carShape([[-1.6, 0.86], [1.15, 0.76], [0.15, 1.13], [-0.65, 1.14], [-1.6, 0.9]], 1.3, 0.06), M_GLASS));
-  add(new THREE.BoxGeometry(0.92, 0.03, 0.78), pPaint, 0, 1.165, -0.26);
-  for (let k = 0; k < 5; k++){ const l = add(new THREE.BoxGeometry(1.1, 0.025, 0.06), pBlack, 0, 0.93 - k * 0.006, -1.72 - k * 0.11); l.rotation.x = -0.05; } // engine-cover louvres
+  B.add(new THREE.Mesh(carShape([[-2.3, 0.34], [-1.86, 0.3], [-1.42, 0, 0.44], [1.01, 0.3], [1.45, 0, 0.44], [2.25, 0.3], [2.42, 0.42], [2.36, 0.58], [1.1, 0.86], [-1.9, 1.0], [-2.34, 0.96]], 1.76, 0.06), pPaint));
+  B.add(new THREE.Mesh(carShape([[-1.6, 0.96], [1.15, 0.86], [0.1, 1.27], [-0.7, 1.28], [-1.6, 1.0]], 1.24, 0.06), M_GLASS));
+  add(new THREE.BoxGeometry(0.9, 0.03, 0.78), pPaint, 0, 1.305, -0.3);
+  for (let k = 0; k < 5; k++){ const l = add(new THREE.BoxGeometry(1.1, 0.025, 0.06), pBlack, 0, 1.03 - k * 0.006, -1.72 - k * 0.11); l.rotation.x = -0.05; } // engine-cover louvres
   for (const x of [-1, 1]){
-    const it = add(new THREE.BoxGeometry(0.06, 0.24, 0.66), pBlack, x * 1.02, 0.66, -0.62); it.rotation.y = x * 0.12;
-    const hl = add(new THREE.BoxGeometry(0.5, 0.04, 0.14), M_HEAD, x * 0.66, 0.5, 2.3); hl.rotation.x = -0.3;
-    add(new THREE.BoxGeometry(0.04, 0.32, 0.12), CARBON, x * 0.55, 1.07, -2.02);
-    add(new THREE.BoxGeometry(0.03, 0.2, 0.5), CARBON, x * 1.0, 1.22, -2.06);
-    add(new THREE.BoxGeometry(0.1, 0.1, 2.3), CARBON, x * 1.0, 0.3, 0.02);
+    const it = add(new THREE.BoxGeometry(0.06, 0.26, 0.66), pBlack, x * 0.93, 0.72, -0.62); it.rotation.y = x * 0.12;
+    const hl = add(new THREE.BoxGeometry(0.46, 0.05, 0.14), M_HEAD, x * 0.6, 0.57, 2.3); hl.rotation.x = -0.3;
+    add(new THREE.BoxGeometry(0.04, 0.34, 0.12), CARBON, x * 0.52, 1.17, -2.02);
+    add(new THREE.BoxGeometry(0.03, 0.2, 0.5), CARBON, x * 0.91, 1.33, -2.06);
+    add(new THREE.BoxGeometry(0.1, 0.1, 2.3), CARBON, x * 0.91, 0.3, 0.02);
   }
-  add(new THREE.BoxGeometry(2.02, 0.05, 0.44), CARBON, 0, 1.25, -2.06);
-  add(new THREE.BoxGeometry(2.0, 0.03, 0.42), CARBON, 0, 0.25, 2.3);
-  add(new THREE.BoxGeometry(1.84, 0.05, 0.04), pTail, 0, 0.8, -2.43);
-  for (const x of [-1, 1]) add(new THREE.BoxGeometry(0.3, 0.1, 0.04), pTail, x * 0.78, 0.74, -2.425);
+  add(new THREE.BoxGeometry(1.84, 0.05, 0.44), CARBON, 0, 1.36, -2.06);
+  add(new THREE.BoxGeometry(1.82, 0.03, 0.42), CARBON, 0, 0.25, 2.3);
+  add(new THREE.BoxGeometry(1.66, 0.05, 0.04), pTail, 0, 0.9, -2.43);
+  for (const x of [-1, 1]) add(new THREE.BoxGeometry(0.3, 0.1, 0.04), pTail, x * 0.7, 0.83, -2.425);
   for (let k = -2; k <= 2; k++) add(new THREE.BoxGeometry(0.02, 0.18, 0.36), CARBON, k * 0.32, 0.32, -2.36);
   const exM = new THREE.MeshStandardMaterial({ color: 0x999999, metalness: 1, roughness: 0.3 });
   for (const x of [-0.3, -0.12, 0.12, 0.3]){ const ex = add(new THREE.CylinderGeometry(0.05, 0.05, 0.16, 10), exM, x, 0.42, -2.42); ex.rotation.x = Math.PI / 2; }
@@ -5824,6 +5837,20 @@ function buildJukai(){
       for (const o of [-6, -11]){ const px = x + F.lx * o, pz = z + F.lz * o; b.add(new THREE.BoxGeometry(2, 0.5, 4), barkM, px, y + 0.8, pz, F.h + Math.PI / 2); for (let k = 0; k < 3; k++){ const g = new THREE.CylinderGeometry(0.35, 0.35, 4.2, 8); g.rotateX(Math.PI / 2); b.add(g, LM(0x6a4a2a), px + F.fx * (k - 1) * 0.7, y + 1.4, pz + F.fz * (k - 1) * 0.7, F.h + Math.PI / 2); } } }
     if (kind === 'jizo'){ const [x, y, z] = at(14, 0); for (let k = 0; k < 7; k++){ const a = k / 7 * TAU, px = x + Math.cos(a) * 4, pz = z + Math.sin(a) * 4, py = shownGround(px, pz); b.add(new THREE.CylinderGeometry(0.3, 0.38, 1, 8), stoneM, px, py + 0.5, pz); b.add(new THREE.SphereGeometry(0.3, 8, 6), stoneM, px, py + 1.22, pz); b.add(new THREE.ConeGeometry(0.42, 0.5, 8), redM, px, py + 0.85, pz); } lantern(x, z, 0.8); }
     JFINDS.push({ kind, name, x: F.x, z: F.z, y: F.y }); });
+  // the fox shrine at the next-furthest dead end: a little red torii, two white foxes, and nine blue fox-fires floating
+  // in a ring. Stop in front of it and the fox-fire follows your car from then on
+  { const E = ends[JFIND_KINDS.length] || ends[ends.length - 1];
+    if (E){ const F = endFrame(E.e, E.node), at = (a, w) => { const [x, z] = F.P(a, w); return [x, shownGround(x, z), z]; }, foxM = LM(0xf2efe6), fireM = new THREE.MeshBasicMaterial({ color: 0x7fd8ff });
+      { const [x, y, z] = at(9, 0); for (const w of [-1.4, 1.4]){ const [px, , pz] = at(9, w); b.add(new THREE.CylinderGeometry(0.14, 0.16, 3, 8), redM, px, y + 1.5, pz); }
+        b.add(new THREE.BoxGeometry(4.0, 0.22, 0.32), redM, x, y + 3.05, z, F.h + Math.PI / 2); b.add(new THREE.BoxGeometry(3.2, 0.14, 0.2), redM, x, y + 2.6, z, F.h + Math.PI / 2); }
+      { const [x, y, z] = at(16, 0); b.add(new THREE.BoxGeometry(2.2, 1.6, 1.8), barkM, x, y + 0.8, z, F.h); b.add(new THREE.ConeGeometry(1.9, 1.0, 4), redM, x, y + 2.1, z, F.h + Math.PI / 4); }
+      for (const w of [-1.6, 1.6]){ const [x, y, z] = at(13, w); b.add(new THREE.BoxGeometry(0.5, 0.5, 0.5), stoneM, x, y + 0.25, z);
+        b.add(new THREE.CylinderGeometry(0.16, 0.24, 0.7, 8), foxM, x, y + 0.85, z); b.add(new THREE.SphereGeometry(0.2, 8, 6), foxM, x, y + 1.32, z);
+        for (const e of [-0.1, 0.1]) b.add(new THREE.ConeGeometry(0.06, 0.2, 4), foxM, x + F.lx * e, y + 1.55, z + F.lz * e);
+        b.add(new THREE.BoxGeometry(0.22, 0.08, 0.06), redM, x, y + 1.08, z, F.h); }
+      { const [cx, cy, cz] = at(12, 0); for (let k = 0; k < 9; k++){ const a = k / 9 * TAU; b.add(new THREE.SphereGeometry(0.22, 8, 6), fireM, cx + Math.cos(a) * 3.6, cy + 2.4 + Math.sin(a * 3) * 0.3, cz + Math.sin(a) * 3.6); }
+        const l = new THREE.PointLight(0x6fc8ff, 2, 30, 2); l.position.set(cx, cy + 3, cz); scene.add(l); }
+      JUKAI_NET.foxSpot = { x: F.x, z: F.z, y: F.y }; } }
   b.flush();
 }
 // fireflies: a little cloud of blinking lights that only lives around you in the forest
@@ -5833,6 +5860,9 @@ const FIREFLY = (() => { const n = 260, g = new THREE.BufferGeometry(), pos = ne
 let jukaiMsgT = 0, jWasIn = false;
 function updateJukai(dt){
   const jk = weather.jk || 0, J = STATE.jukai, v = Math.hypot(car.vx, car.vy);
+  { const S = JUKAI_NET.foxSpot; if (S && !STATE.unlocked.includes('fox:ON')){ const d = Math.hypot(car.x - S.x, car.z - S.z);
+      if (d < 90 && !S.told){ S.told = true; toast('A FOX SHRINE', 'STOP IN FRONT OF THE TORII', '#7fd8ff'); } else if (d > 160) S.told = false;
+      if (d < 24 && v < 5){ grantReward('fox:ON'); sfx.beep(2200); toast('狐火 · KITSUNE-BI', 'THE FOX-FIRE FOLLOWS YOU NOW · SWITCH IT IN THE GARAGE', '#7fd8ff'); } } }
   // fireflies
   FIREFLY.p.visible = jk > 0.25; if (FIREFLY.p.visible){ FIREFLY.m.opacity = jk * (0.55 + 0.45 * Math.sin(simT * 2.3)) * (1 - DAY.dayF);
     if (Math.hypot(car.x - FIREFLY.cx, car.z - FIREFLY.cz) > 45){ FIREFLY.cx = car.x; FIREFLY.cz = car.z; for (let i = 0; i < FIREFLY.n; i++){ const a = rnd() * TAU, r = 8 + rnd() * 70, x = car.x + Math.cos(a) * r, z = car.z + Math.sin(a) * r; FIREFLY.pos[i * 3] = x; FIREFLY.pos[i * 3 + 1] = shownGround(x, z) + 0.6 + rnd() * 3.5; FIREFLY.pos[i * 3 + 2] = z; } FIREFLY.p.geometry.attributes.position.needsUpdate = true; } }
@@ -5875,6 +5905,7 @@ function grantReward(r){
   if (type === 'part'){ const id = val.replace(/\d$/, ''); STATE.up[id] = Math.max(STATE.up[id] || 0, 4); applyUpgrades(); }
   if (type === 'cash'){ STATE.cash += +val; }
   if (type === 'mod'){ if (!STATE.mods.includes(val)) STATE.mods.push(val); applyUpgrades(); }
+  if (type === 'fox'){ if (!STATE.unlocked.includes(r)) STATE.unlocked.push(r); STATE.fox = true; }
   applyCosmetics(); renderCosmetics(); saveState();
 }
 // ---------- cosmetics on your car only
@@ -5907,13 +5938,32 @@ function applyCosmetics(){
 function renderCosmetics(){
   const el = $('cosm'); if (!el) return;
   const have = STATE.unlocked.filter(r => !r.startsWith('paint:'));
-  if (!have.length){ el.innerHTML = '<span class="dim">Secret places hide paints, underglow, rims and a wing</span>'; return; }
-  el.innerHTML = have.map(r => { const [t, v] = r.split(':'), on = t === 'glow' ? STATE.glow === v : t === 'rims' ? STATE.rims === v : !!STATE.wing; return `<button type="button" class="chip${on ? ' on' : ''}" data-cos="${r}">${REWARD_TEXT[r] || r}</button>`; }).join('');
+  if (!have.length){ el.innerHTML = '<span class="dim">Secret places hide paints, underglow, rims, a wing and something stranger</span>'; return; }
+  el.innerHTML = have.map(r => { const [t, v] = r.split(':'), on = t === 'glow' ? STATE.glow === v : t === 'rims' ? STATE.rims === v : t === 'fox' ? !!STATE.fox : !!STATE.wing; return `<button type="button" class="chip${on ? ' on' : ''}" data-cos="${r}">${REWARD_TEXT[r] || r}</button>`; }).join('');
   el.querySelectorAll('[data-cos]').forEach(b => b.addEventListener('click', () => { const [t, v] = b.dataset.cos.split(':');
-    if (t === 'glow') STATE.glow = STATE.glow === v ? null : v; if (t === 'rims') STATE.rims = STATE.rims === v ? null : v; if (t === 'wing') STATE.wing = !STATE.wing;
+    if (t === 'glow') STATE.glow = STATE.glow === v ? null : v; if (t === 'rims') STATE.rims = STATE.rims === v ? null : v; if (t === 'wing') STATE.wing = !STATE.wing; if (t === 'fox') STATE.fox = !STATE.fox;
     applyCosmetics(); renderCosmetics(); saveState(); }));
 }
 applyCosmetics();
+// KITSUNE-BI: nine blue fox-fires circle your car, a trail of ghost fire streams behind you at speed and the pipes burn blue
+const FOX = (() => {
+  const tex = canvasTex(64, 64, g => { const gr = g.createRadialGradient(32, 32, 1, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(160,230,255,0.85)'); gr.addColorStop(1, 'rgba(60,140,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); });
+  const mk = (col, op) => new THREE.SpriteMaterial({ map: tex, color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+  const orbM = mk(0x8fdcff, 0.95), orbs = [], trail = [];
+  for (let i = 0; i < 9; i++){ const s = new THREE.Sprite(orbM); s.scale.setScalar(0.75); s.visible = false; scene.add(s); orbs.push(s); }
+  for (let i = 0; i < 70; i++){ const s = new THREE.Sprite(mk(0x4aa8ff, 0)); s.visible = false; scene.add(s); trail.push({ s, life: 0 }); }
+  return { orbs, trail, i: 0, t: 0, emit: 0 };
+})();
+function updateFox(dt){
+  const on = !!STATE.fox && started; FOX.t += dt;
+  FOX.orbs.forEach((s, i) => { s.visible = on; if (!on) return; const a = FOX.t * 1.5 + i / 9 * TAU, r = 2.9 + Math.sin(FOX.t * 2 + i) * 0.25;
+    s.position.set(car.x + Math.cos(a) * r, car.y + 1.0 + Math.sin(FOX.t * 3 + i * 1.7) * 0.35, car.z + Math.sin(a) * r); s.scale.setScalar(0.62 + 0.18 * Math.sin(FOX.t * 9 + i * 2.3)); });
+  const v = Math.hypot(car.vx, car.vy);
+  if (on && v > 8){ FOX.emit += dt * Math.min(60, v * 1.1); while (FOX.emit >= 1){ FOX.emit--; const p = FOX.trail[FOX.i = (FOX.i + 1) % FOX.trail.length], side = (FOX.i & 1) ? 1 : -1;
+      p.life = 1; p.s.visible = true; p.s.position.set(car.x - Math.sin(car.h) * 2.3 + Math.cos(car.h) * side * 0.7 + (rnd() - 0.5) * 0.3, car.y + 0.45 + rnd() * 0.3, car.z - Math.cos(car.h) * 2.3 - Math.sin(car.h) * side * 0.7 + (rnd() - 0.5) * 0.3); } }
+  for (const p of FOX.trail){ if (p.life <= 0) continue; p.life -= dt * 1.4; if (p.life <= 0){ p.s.visible = false; continue; } p.s.material.opacity = p.life * 0.8; p.s.scale.setScalar(0.5 + (1 - p.life) * 1.3); p.s.position.y += dt * 0.8; }
+  if (on && flameT <= 0.01 && !car.nosOn){ flameT = 0.04; FLAME_MAT.color.setHex(0x5ab8ff); } // blue fire from the pipes
+}
 // the first clue is always pinned on the map (and set as the GPS route on a fresh game) so you know where the trail starts
 let CLUE1_TOLD = false;
 if (STATE.quest <= 1 && !STATE.cluePin && CLUES[0]){ const C = CLUES[0], q = nearestRoadPoint(C.x, C.z); STATE.cluePin = 1; if (q && !STATE.dest) STATE.dest = { type: 'pt', x: C.x, z: C.z, eId: q.e.id, s: q.s, label: 'CLUE 1 · THE END OF THE TRACK' }; }
@@ -6742,8 +6792,8 @@ function updateVisuals(dt, t){
   }
   // street lamps near you light the cars too
   lampT -= dt; if (lampT <= 0){ lampT = 0.1; lampsNear(car.x, car.z, _lamps); _lamps.sort((a, b) => (a.x - car.x) ** 2 + (a.z - car.z) ** 2 - (b.x - car.x) ** 2 - (b.z - car.z) ** 2);
-    lampLights.forEach((L, i) => { const lp = _lamps[i]; if (lp){ L.position.set(lp.x, lp.y - 0.4, lp.z); L.visible = true; } else L.visible = false; }); }
-  for (const L of lampLights) L.intensity = 1.5 * weather.lights * (weather.power < 0.98 && rnd() < 0.15 ? 0.2 : 1);
+    lampLights.forEach((L, i) => { const lp = _lamps[i]; if (lp){ L.position.set(lp.x, lp.y - 0.4, lp.z); L.userData.on = true; } else L.userData.on = false; }); } // spare lights are dimmed, never hidden: hiding one changes the light count and every shader rebuilds (a big stutter)
+  for (const L of lampLights) L.intensity = L.userData.on === false ? 0 : 1.5 * weather.lights * (weather.power < 0.98 && rnd() < 0.15 ? 0.2 : 1);
   { const dv = Math.round(car.damage * 20) / 20; if (dv !== DMGV.level){ DMGV.level = dv; applyDamageVisual(dv); } }
   if (car.damage > 0.45 && rnd() < (car.damage - 0.35) * 0.5){ const fx = Math.sin(car.h), fz = Math.cos(car.h); puff(car.x + fx * 1.7, car.y + 0.95, car.z + fz * 1.7, 0, 0, 0.15 + car.damage * 0.3, 0.6); }
   if (STATION_LIGHT_POS.length){ let bp = STATION_LIGHT_POS[0], bd = Infinity; for (const q of STATION_LIGHT_POS){ const d2 = (q.x - car.x) ** 2 + (q.z - car.z) ** 2; if (d2 < bd){ bd = d2; bp = q; } } STATION_LIGHT.position.set(bp.x, bp.y + 4.4, bp.z); }
@@ -6824,6 +6874,7 @@ function frame(now){
   if (started) requestAnimationFrame(frame); else setTimeout(() => requestAnimationFrame(frame), 33); // the menu's slow turn round the car doesn't need 60 fps
   const rawDt = (now - last) / 1000; let dt = Math.min(0.05, rawDt); last = now;
   watchQuality(rawDt);
+  if (!SHADERS_WARM) warmShaders();
   stepGame(dt);
   if (composer && quality.bloom) composer.render(); else renderer.render(scene, camera);
   drawMirror();
@@ -6858,12 +6909,13 @@ function stepGame(dt){
   if (car.sup && car.sup.e){ car.lastE = car.sup.e; car.lastS = clamp(car.sup.s, 0, car.sup.e.len); const r = edgeAt(car.lastE, car.lastS, _ra); car.lastDir = car.lastE.oneway ? 1 : (Math.cos(angWrap(car.h - r.h)) >= 0 ? 1 : -1); }
   updateTraffic(dt);
   if (started){ updatePolice(dt); copBumps(); updateSpikes(dt); updateSecrets(dt, simT); updateLore(dt); updateHeist(dt); updateJukai(dt); }
+  updateFox(dt);
   updateNdNet(dt);
   updateHeli(dt, simT); updateBoom(dt);
   if (started){ scoring(dt); stations(dt); updateGps(dt); updateGpsLine(dt); }
   updateVisuals(dt, simT); updateCockpit(dt); perfTick(dt);
   drawTraffic(simT); drawPolice(dt, simT);
-  updateChunks(car.x, car.z, 1);
+  updateChunks(car.x, car.z, 1); preloadTextures();
   for (const p of NearPool.all) p.update(car.x, car.z);
   if (started) updateCamera(dt);
   else { const a = simT * 0.15 + car.h + 2.4, R = 7.5; camera.position.set(car.x + Math.sin(a) * R, car.y + 2.2, car.z + Math.cos(a) * R); camera.lookAt(car.x, car.y + 0.7, car.z); sky.position.copy(camera.position); stars.position.copy(camera.position); }
@@ -6914,6 +6966,29 @@ try { VM.on = localStorage.getItem('nd-vmir') !== '0'; } catch (e) {}
 VM.cam.position.set(0, 1.6, -1.0); player.add(VM.cam); VM.rt.texture.wrapS = THREE.RepeatWrapping; VM.rt.texture.repeat.x = -1; VM.rt.texture.offset.x = 1;
 VM.scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: VM.rt.texture, depthTest: false })));
 addEventListener('keydown', e => { if (e.code === 'KeyB' && !e.repeat && started && !(e.target && e.target.tagName === 'INPUT')){ VM.on = !VM.on; try { localStorage.setItem('nd-vmir', VM.on ? '1' : '0'); } catch (er) {} toast(VM.on ? 'MIRROR ON' : 'MIRROR OFF', 'B', '#9fd6ff'); } });
+// compile every shader up front (for the screen and for the mirror strip, which needs its own versions), with hidden
+// things shown for a moment, so nothing has to be compiled mid-drive: that froze the game for 0.1-0.2 s the first time
+// a new kind of object came into view, which at speed looked like skipping forward
+let SHADERS_WARM = false;
+function warmShaders(){
+  SHADERS_WARM = true; const hid = [];
+  const hasLight = o => { let f = false; o.traverse(c => { if (c.isLight) f = true; }); return f; };
+  scene.traverse(o => { if (!o.visible && !hasLight(o)){ hid.push(o); o.visible = true; } }); // (never lights: the light count must stay the same)
+  try { renderer.compile(scene, camera); const keep = renderer.getRenderTarget(); renderer.setRenderTarget(VM.rt); renderer.compile(scene, VM.cam); renderer.setRenderTarget(keep); } catch (e) {}
+  for (const o of hid) o.visible = false;
+  // and list every picture (signs, posters...) with where it stands, so it can be sent to the graphics card before you
+  // get there, a few a frame, instead of dozens in the one frame a town comes into view
+  const seen = new Set(), wp = new THREE.Vector3();
+  scene.traverse(o => { if (!o.material) return; for (const m of (Array.isArray(o.material) ? o.material : [o.material])) for (const k of ['map', 'emissiveMap', 'alphaMap']){ const t = m[k]; if (!t || seen.has(t) || !t.image) continue; seen.add(t);
+    if (o.isInstancedMesh || o === player || (o.geometry && o.geometry.boundingSphere && o.geometry.boundingSphere.radius > 3000)){ TEXQ.near.push(t); continue; } o.getWorldPosition(wp); TEXQ.list.push({ t, x: wp.x, z: wp.z }); } });
+}
+const TEXQ = { list: [], near: [] };
+function preloadTextures(){
+  if (!SHADERS_WARM) return; let n = 0;
+  while (TEXQ.near.length && n < 3){ const t = TEXQ.near.pop(); try { renderer.initTexture(t); } catch (e) {} n++; }
+  for (let i = TEXQ.list.length - 1; i >= 0 && n < 3; i--){ const q = TEXQ.list[i]; if ((q.x - car.x) ** 2 + (q.z - car.z) ** 2 > 2000 * 2000) continue;
+    try { renderer.initTexture(q.t); } catch (e) {} TEXQ.list[i] = TEXQ.list[TEXQ.list.length - 1]; TEXQ.list.pop(); n++; }
+}
 function drawMirror(){ const el = $('vmir'), show = VM.on && started && !paused; if (el.hidden === show) el.hidden = !show; if (!show) return;
   const b = el.getBoundingClientRect(); if (b.width < 10) return;
   if ((VM.n++ & 1) === 0){ VM.cam.updateMatrixWorld(); const keep = renderer.getRenderTarget(); renderer.setRenderTarget(VM.rt); renderer.render(scene, VM.cam); renderer.setRenderTarget(keep); } // the view behind is redrawn every other frame
@@ -6951,8 +7026,8 @@ const ownerShown = o => { while (o){ if (!o.visible) return false; o = o.parent;
 function perfTick(dt){
   PERF.t -= dt; if (PERF.t > 0) return; PERF.t = 0.2;
   const cx = camera.position.x, cz = camera.position.z;
-  // how far you can actually see through the mist right now (less than 1% of anything is left beyond this)
-  const see = clamp(2.4 / Math.max(1e-4, scene.fog.density), 260, Math.min(camera.far, CH_R - 150)), seeGlow = camera.far; // never past the edge of the ground that's loaded: nothing hangs in the sky
+  // how far you can actually see through the mist right now (only ~1% of anything is left beyond this)
+  const see = clamp(2.15 / Math.max(1e-4, scene.fog.density), 260, Math.min(camera.far, CH_R - 150)), seeGlow = camera.far; // never past the edge of the ground that's loaded: nothing hangs in the sky
   for (const P of PERF.list){ const d = Math.hypot(P.x - cx, P.z - cz) - P.r, on = d < (P.glow ? seeGlow : see); if (P.grp){ if (P.on !== on){ P.on = on; P.o.traverse(c => c.layers.set(on ? 0 : 1)); } } else P.o.layers.set(on ? 0 : 1); }
   for (const ch of chunks.values()) if (ch.mesh) ch.mesh.layers.set(Math.hypot(ch.x0 + CH / 2 - cx, ch.z0 + CH / 2 - cz) - 283 < see ? 0 : 1); // the ground too
   // hand the shared lights to the nearest feature lights that are switched on
