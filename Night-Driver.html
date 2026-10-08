@@ -267,6 +267,8 @@ body.touch .dash{transform:scale(.62);transform-origin:right bottom;right:8px;bo
         <div class="seg"><input type="radio" name="trans" id="tAuto" value="auto" checked><label for="tAuto">AUTO</label><input type="radio" name="trans" id="tMan" value="manual"><label for="tMan">MANUAL</label></div></div>
       <div class="field"><span class="lbl">Assists</span>
         <div class="seg"><input type="radio" name="assist" id="aOn" value="on" checked><label for="aOn">ON</label><input type="radio" name="assist" id="aOff" value="off"><label for="aOff">OFF</label></div></div>
+      <div class="field"><span class="lbl">Traffic · solo only</span>
+        <div class="seg"><input type="radio" name="traffic" id="trOn" value="on" checked><label for="trOn">ON</label><input type="radio" name="traffic" id="trOff" value="off"><label for="trOff">OFF</label></div></div>
     </div>
     <div class="keys">
       <kbd>W / ↑</kbd><span>Throttle</span>
@@ -4279,6 +4281,11 @@ for (const k in TYPES){
 }
 const typeBag = []; for (const k in TYPES) for (let i = 0; i < Math.round(TYPES[k].w * 100); i++) typeBag.push(k);
 const traffic = [];
+// online (see 87-net): the room's host runs the traffic for everyone. On the host, `centers` are the other players (so
+// cars spawn round them and brake for them); on everyone else `remote` is on and `step` shows the host's cars instead.
+// `off` is the solo-only switch that empties the roads
+const TRAFFIC_NET = { remote: false, step: null, centers: [], off: false };
+const nearAnyone = (x, z, r) => { if ((x - car.x) ** 2 + (z - car.z) ** 2 < r * r) return true; for (const p of TRAFFIC_NET.centers) if ((x - p.x) ** 2 + (z - p.z) ** 2 < r * r) return true; return false; };
 for (let i = 0; i < TRAFFIC_N; i++){
   const type = typeBag[Math.floor(rnd() * typeBag.length)], t = TYPES[type];
   const pal = TYPE_COLORS[type] || TRAFFIC_COLORS, color = new THREE.Color(pal[Math.floor(rnd() * pal.length)]);
@@ -4326,7 +4333,7 @@ function spawnCar(c, px, pz){
     const dir = e.oneway ? 1 : rnd() < 0.5 ? 1 : -1;
     if (c.truck && (e.cls === 'st' || e.cls === 'rp' || e.cls === 'al')) continue;
     const lane = c.truck && e.cls === 'cw' ? 1 + Math.floor(rnd() * 2) : Math.floor(rnd() * e.C.lanes);
-    const r = edgeAt(e, s, _ra); if (Math.hypot(r.x - px, r.z - pz) < 380) continue;
+    const r = edgeAt(e, s, _ra); if (nearAnyone(r.x, r.z, 380)) continue; // never pops in in front of anybody
     if (!laneFree(e, dir, lane, s, c, 45, 45)) continue;
     c.mode = 'edge'; c.e = e; c.s = s; c.dir = dir; c.lane = c.tlane = lane; c.d = laneD(e, dir, lane); c.latV = 0; c.x = r.x; c.z = r.z;
     // around Nagisa the port fills the roads with lorries
@@ -4400,18 +4407,23 @@ function computeTarget(px, pz){
   }
   return Math.min(TRAFFIC_N, Math.round(sum));
 }
+let spawnRR = 0;
 function updateTraffic(dt){
+  if (TRAFFIC_NET.off){ for (const c of traffic) if (c.mode !== 'park') parkCar(c); bucketMovers(); return; } // traffic switched off (solo only)
+  if (TRAFFIC_NET.remote && TRAFFIC_NET.step){ TRAFFIC_NET.step(dt); return; }                               // showing the room host's traffic
   bucketMovers();
-  const px = car.x, pz = car.z;
-  targetT -= dt; if (targetT <= 0){ targetT = 1.5; trafficTarget = computeTarget(px, pz); }
+  const px = car.x, pz = car.z, C = [[px, pz]]; for (const p of TRAFFIC_NET.centers) C.push([p.x, p.z]);
+  const dMin = (x, z) => { let d = Infinity; for (const [cx, cz] of C) d = Math.min(d, Math.hypot(x - cx, z - cz)); return d; };
+  targetT -= dt; if (targetT <= 0){ targetT = 1.5; let sum = 0; C.forEach(([cx, cz], i) => { if (i === 0 || C.slice(0, i).every(([ax, az]) => Math.hypot(ax - cx, az - cz) > 1500)) sum += computeTarget(cx, cz); }); trafficTarget = Math.min(TRAFFIC_N, sum); }
   let active = 0; for (const c of traffic) if (c.mode !== 'park') active++;
   let spawns = 0;
   for (const c of traffic){
-    if (c.mode === 'park'){ c.parkT -= dt; if (c.parkT <= 0 && spawns < 8 && active < trafficTarget){ spawns++; if (spawnCar(c, px, pz)) active++; } else if (c.parkT <= 0) c.parkT = 0.3 + rnd() * 0.5; continue; }
+    if (c.mode === 'net'){ parkCar(c); continue; } // left over from showing a host's traffic
+    if (c.mode === 'park'){ c.parkT -= dt; if (c.parkT <= 0 && spawns < 8 && active < trafficTarget){ spawns++; const [sx, sz] = C[spawnRR++ % C.length]; if (spawnCar(c, sx, sz)) active++; } else if (c.parkT <= 0) c.parkT = 0.3 + rnd() * 0.5; continue; }
     // too many for this stretch: quietly drop ones that are far away
-    if (active > trafficTarget * 1.15 + 2 && Math.hypot(c.x - px, c.z - pz) > 800){ parkCar(c); active--; continue; }
-    // far away: recycle
-    const dp = Math.hypot(c.x - px, c.z - pz);
+    const dp = dMin(c.x, c.z);
+    if (active > trafficTarget * 1.15 + 2 && dp > 800){ parkCar(c); active--; continue; }
+    // far away from everybody: recycle
     if (dp > 1350 || (c.stuck > 20 && dp > 120)){ parkCar(c); continue; }
     if (c.mode === 'conn'){ moveConn(c, dt); continue; }
     moveOnEdge(c, dt);
@@ -4458,6 +4470,10 @@ function moveOnEdge(c, dt){
     if (c.ghost > 0){ gap = Infinity; lv = 0; } // squeezing past a jam: only you count
     if (g < gap){ gap = g; lv = Math.max(0, Math.hypot(car.vx, car.vy) * Math.cos(angWrap(car.h - c.h))); byPlayer = g < 25; }
   }
+  // friends in an online room: brake for them the same way
+  for (const p of TRAFFIC_NET.centers){ const fw = (p.x - c.x) * Math.sin(c.h) + (p.z - c.z) * Math.cos(c.h); if (fw <= 0 || fw > 40) continue;
+    const lt = (p.x - c.x) * Math.cos(c.h) - (p.z - c.z) * Math.sin(c.h); if (Math.abs(lt) > c.wid / 2 + 1.4 || Math.abs(p.y - c.y) > 3) continue;
+    const g = fw - c.len / 2 - 2.3; if (g < gap){ gap = g; lv = Math.max(0, p.v * Math.cos(angWrap(p.h - c.h))); } }
   // the junction ahead: wait your turn
   const R = nodeR(n, e);
   let stopAt = Infinity;
@@ -6815,10 +6831,12 @@ const STRIPES = [0xf2f2f2, 0xf2f2f2, 0xf2f2f2, 0x15161a, 0xff8a1e, 0x15161a, 0x1
 function setPaint(k){ if (!PAINTS[k]) k = 0; pPaint.color.setHex(PAINTS[k].hex); pPaint.metalness = PAINTS[k].metal ?? 0.6; pPaint.roughness = PAINTS[k].rough ?? 0.26; STRIPE.color.setHex(STRIPES[k] ?? 0xf2f2f2); const el = $('paint' + k); if (el) el.checked = true; }
 paintsEl.addEventListener('change', e => { if (heistLock()){ setPaint(STATE.paint); toast('ON THE JOB', 'A NEW COLOUR NEEDS A RESPRAY: ANY GARAGE OR TUNE SHOP, $1,500', '#ffb04a'); return; } STATE.paint = +e.target.value; setPaint(STATE.paint); saveState(); });
 document.querySelectorAll('input[name=trans]').forEach(el => el.addEventListener('change', () => { opts.auto = $('tAuto').checked; STATE.trans = opts.auto ? 'auto' : 'manual'; flags(); }));
+document.querySelectorAll('input[name=traffic]').forEach(el => el.addEventListener('change', () => { STATE.trafficOff = $('trOff').checked; saveState(); }));
 document.querySelectorAll('input[name=assist]').forEach(el => el.addEventListener('change', () => { opts.assist = $('aOn').checked; STATE.assist = opts.assist; flags(); }));
 function saveLine(){ const s = STATE; $('saveLine').innerHTML = `SAVED: <b>$${Math.round(s.cash).toLocaleString()}</b> · WANTED <i>${starText(s.stars)}</i> · UPGRADES ${Object.values(s.up).reduce((a, b) => a + b, 0)}/21 · ${(s.odo / 1000).toFixed(0)} km DRIVEN · STORY: ${STATE.lore && STATE.lore.complete ? 'COMPLETE' : STATE.lore && STATE.lore.found ? 'CHAPTER ' + STATE.lore.ch + ' / ' + LORE.length : 'NOT STARTED'}`; }
 let backFromMenu = false; // came to the menu mid-drive (from pause): carry on from the same spot
 $('go').addEventListener('click', () => {
+  if (!START_STATION) return; // the world is still loading
   sfx.init(); sfx.resume();
   started = true; $('menu').hidden = true; $('hud').hidden = false; cam.init = false;
   if (backFromMenu){ backFromMenu = false; $('go').textContent = 'Start at the gas station'; toast(CAR_MODELS[CARV.id].name, 'BACK ON THE ROAD', '#7fe3ff'); return; }
@@ -6949,7 +6967,7 @@ function boot(){
   const times = buildWorld();
   placePolice(); perfSetup();
   setCar(STATE.car || 'raijin'); { const r = $('car-' + CARV.id); if (r) r.checked = true; }
-  setPaint(STATE.paint); opts.auto = STATE.trans !== 'manual'; opts.assist = STATE.assist !== false; $('tAuto').checked = opts.auto; $('tMan').checked = !opts.auto; $('aOn').checked = opts.assist; $('aOff').checked = !opts.assist; flags();
+  setPaint(STATE.paint); opts.auto = STATE.trans !== 'manual'; opts.assist = STATE.assist !== false; $('tAuto').checked = opts.auto; $('tMan').checked = !opts.auto; $('aOn').checked = opts.assist; $('aOff').checked = !opts.assist; $('trOn').checked = !STATE.trafficOff; $('trOff').checked = !!STATE.trafficOff; flags();
   spawnAt(START_STATION);
   updateChunks(car.x, car.z, 999);
   for (const p of NearPool.all) p.update(car.x, car.z, true);
@@ -7082,8 +7100,46 @@ function ndConnectAll(){
     setTimeout(() => fin(ndRelaysUp() > 0), 12000);
   });
 }
-// your position goes out 10 times a second on its own timer, so it keeps going while you're paused or on the map
-setInterval(() => { if (NDNET.live && NDNET.mode !== 'solo') ndSend(ndState()); }, 100);
+// your position goes out 10 times a second on its own timer, so it keeps going while you're paused or on the map; the
+// host also sends the traffic near everyone else 5 times a second
+let ndTick = 0;
+setInterval(() => { if (!NDNET.live || NDNET.mode === 'solo') return; ndSend(ndState()); if (NDNET.mode === 'host' && NDNET.others.size && (ndTick++ & 1)) ndSend(ndTrafficPacket()); }, 100);
+// ---------- shared traffic: the host's game runs the cars for the whole room, so you all cut through the same traffic
+// (each car: slot, x, y, z, heading, speed, slope, type, colour, flags 1 = braking 2 = wrecked)
+const TYPE_KEYS = Object.keys(TYPES);
+const NETTR = { t: -1e9, slots: new Map() };
+const r1 = v => Math.round(v * 10) / 10, r3 = v => Math.round(v * 1000) / 1000;
+function ndTrafficPacket(){
+  const F = [...NDNET.others.values()].map(o => o.grp.position), k = [];
+  traffic.forEach((c, i) => { if (c.mode === 'park') return; let near = false; for (const p of F) if ((p.x - c.x) ** 2 + (p.z - c.z) ** 2 < 760 * 760){ near = true; break; } if (!near) return;
+    k.push(i, r1(c.x), r1(c.y), r1(c.z), r3(c.h), r1(c.v), r3(c.slope || 0), TYPE_KEYS.indexOf(c.type), c.color.getHex(), (c.acc < -0.9 || c.v < 0.5 ? 1 : 0) | (c.wreck > 0 ? 2 : 0)); });
+  return { t: 'tr', v: ND_VER, id: NDNET.id, k };
+}
+function ndTrafficIn(m){
+  if (NDNET.mode === 'host' || !Array.isArray(m.k)) return; const now = ndNow(); NETTR.t = now;
+  for (let j = 0; j + 9 < m.k.length; j += 10){ const i = m.k[j]; if (!traffic[i]) continue; let S = NETTR.slots.get(i); if (!S){ S = { buf: [] }; NETTR.slots.set(i, S); }
+    if (now - (S.last || 0) > 1.2){ S.buf.length = 0; S.fresh = true; }
+    S.buf.push({ t: now, x: m.k[j + 1], y: m.k[j + 2], z: m.k[j + 3], h: m.k[j + 4], v: m.k[j + 5], sl: m.k[j + 6] }); if (S.buf.length > 8) S.buf.shift();
+    S.ty = TYPE_KEYS[m.k[j + 7]] || 'sedan'; S.col = m.k[j + 8]; S.f = m.k[j + 9]; S.last = now; }
+}
+function ndTrafficStep(dt){
+  const now = ndNow(), tR = now - 0.25;
+  traffic.forEach((c, i) => {
+    if (c.mode === 'edge' || c.mode === 'conn') parkCar(c); // our own cars make way for the host's
+    const S = NETTR.slots.get(i);
+    if (!S || now - S.last > 1.2 || !S.buf.length){ if (c.mode !== 'park'){ c.mode = 'park'; c.parkT = 1; } return; }
+    if (c.type !== S.ty){ const T = TYPES[S.ty]; c.type = S.ty; c.len = T.len; c.wid = T.wid; c.mass = T.mass; c.truck = !!T.big; }
+    if (c.color.getHex() !== S.col) c.color = new THREE.Color(S.col);
+    if (S.fresh){ S.fresh = false; c.hit = false; c.prevRel = 0; }
+    const B = S.buf; let a = B[0], b = B[B.length - 1]; for (let q = 0; q < B.length - 1; q++) if (B[q].t <= tR && B[q + 1].t >= tR){ a = B[q]; b = B[q + 1]; break; }
+    let k = b.t > a.t ? clamp((tR - a.t) / (b.t - a.t), 0, 1) : 1;
+    c.mode = 'net'; c.x = lerp(a.x, b.x, k); c.y = lerp(a.y, b.y, k); c.z = lerp(a.z, b.z, k); c.h = a.h + angWrap(b.h - a.h) * k; c.v = b.v; c.slope = b.sl;
+    if (tR > b.t){ const ex = Math.min(0.5, tR - b.t); c.x += Math.sin(b.h) * b.v * ex; c.z += Math.cos(b.h) * b.v * ex; } // a late update: keep it rolling
+    c.acc = S.f & 1 ? -2 : 0; c.wreck = S.f & 2 ? 1 : 0;
+  });
+  bucketMovers();
+}
+TRAFFIC_NET.step = ndTrafficStep;
 function ndRoomStatus(){ const n = NDNET.others.size, r = ndRelaysUp(); ndStatus('In room <b>' + NDNET.code + '</b> (' + r + ' of ' + ND_BROKERS.length + ' relays) · ' + (n ? n + (n > 1 ? ' friends' : ' friend') + ' here · press J to jump to them' : 'waiting for friends: send them the code') + ' · everyone needs this same game file'); }
 async function ndStart(code, host){
   try { await ndLoadLib(); } catch (e) { ndStatus('Couldn\'t load the online part (no internet?). Check your connection and try again.'); return false; }
@@ -7091,7 +7147,8 @@ async function ndStart(code, host){
   ndStatus((host ? 'Making room <b>' : 'Joining room <b>') + code + '</b>…');
   const ok = await ndConnectAll();
   if (!ok){ NDNET.mode = 'solo'; ndStatus('Couldn\'t reach any of the online relays. Your internet (or a school/work filter) may be blocking them. Try another network or a phone hotspot.'); return false; }
-  ndRoomStatus(); return true;
+  ndRoomStatus(); for (const el of [$('trOn'), $('trOff')]) if (el) el.disabled = true; if ($('trOn')) $('trOn').checked = true; // traffic is always on in a room
+  return true;
 }
 function ndHost(){ const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; return ndStart(Array.from({ length: 5 }, () => A[Math.floor(Math.random() * A.length)]).join(''), true); }
 function ndJoin(code){ code = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); if (code.length !== 5){ ndStatus('Room codes have 5 letters.'); return Promise.resolve(false); } return ndStart(code, false); }
@@ -7100,6 +7157,7 @@ function ndOnData(m){
   if (typeof m.q === 'number'){ if (m.q <= (NDNET.lastQ.get(m.id) || 0)) return; NDNET.lastQ.set(m.id, m.q); } // the same message through two relays only counts once
   if (m.v !== ND_VER){ ndStatus('Someone in room <b>' + NDNET.code + '</b> has a different version of the game. Everyone needs the same, newest file.'); return; }
   if (m.t === 'bye'){ if (NDNET.others.has(m.id)){ toast(String(NDNET.others.get(m.id).name) + ' LEFT', 'ROOM ' + NDNET.code, '#8d96ab'); ndDrop(m.id); ndRoomStatus(); } return; }
+  if (m.t === 'tr'){ ndTrafficIn(m); return; }
   if (m.t === 'hi'){ ndSend(ndState()); return; } // a newcomer: tell them where we are straight away
   if (m.t === 's'){ const fresh = !NDNET.others.has(m.id); m.v = m.v2; ndGot(m); if (fresh){ toast(String(m.n) + ' IS IN THE ROOM', 'PRESS J TO JUMP TO THEM', '#3de8ff'); ndRoomStatus(); } }
 }
@@ -7116,6 +7174,10 @@ function ndGot(st){
 }
 function ndDrop(id){ const o = NDNET.others.get(id); if (!o) return; scene.remove(o.grp); o.grp.traverse(x => { if (x.isSprite){ x.material.map.dispose(); x.material.dispose(); } }); NDNET.others.delete(id); }
 function updateNdNet(dt){
+  // traffic: the solo on/off switch, the host's view of the other players, and whether we're showing the host's cars
+  TRAFFIC_NET.off = !!STATE.trafficOff && NDNET.mode === 'solo';
+  TRAFFIC_NET.remote = NDNET.mode === 'client' && ndNow() - NETTR.t < 3;
+  TRAFFIC_NET.centers = NDNET.mode === 'host' ? [...NDNET.others.values()].map(o => { const b = o.buf[o.buf.length - 1] || {}; return { x: o.grp.position.x, y: o.grp.position.y, z: o.grp.position.z, h: o.grp.rotation.y, v: b.v || 0 }; }) : [];
   if (NDNET.mode === 'solo') return;
   const now = ndNow();
   for (const [id, o] of NDNET.others){ if (now - o.last > 8){ ndDrop(id); continue; }
