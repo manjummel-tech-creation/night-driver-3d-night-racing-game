@@ -79,6 +79,11 @@ for (const k in TYPES){
 }
 const typeBag = []; for (const k in TYPES) for (let i = 0; i < Math.round(TYPES[k].w * 100); i++) typeBag.push(k);
 const traffic = [];
+// online (see 87-net): the room's host runs the traffic for everyone. On the host, `centers` are the other players (so
+// cars spawn round them and brake for them); on everyone else `remote` is on and `step` shows the host's cars instead.
+// `off` is the solo-only switch that empties the roads
+const TRAFFIC_NET = { remote: false, step: null, centers: [], off: false };
+const nearAnyone = (x, z, r) => { if ((x - car.x) ** 2 + (z - car.z) ** 2 < r * r) return true; for (const p of TRAFFIC_NET.centers) if ((x - p.x) ** 2 + (z - p.z) ** 2 < r * r) return true; return false; };
 for (let i = 0; i < TRAFFIC_N; i++){
   const type = typeBag[Math.floor(rnd() * typeBag.length)], t = TYPES[type];
   const pal = TYPE_COLORS[type] || TRAFFIC_COLORS, color = new THREE.Color(pal[Math.floor(rnd() * pal.length)]);
@@ -126,7 +131,7 @@ function spawnCar(c, px, pz){
     const dir = e.oneway ? 1 : rnd() < 0.5 ? 1 : -1;
     if (c.truck && (e.cls === 'st' || e.cls === 'rp' || e.cls === 'al')) continue;
     const lane = c.truck && e.cls === 'cw' ? 1 + Math.floor(rnd() * 2) : Math.floor(rnd() * e.C.lanes);
-    const r = edgeAt(e, s, _ra); if (Math.hypot(r.x - px, r.z - pz) < 380) continue;
+    const r = edgeAt(e, s, _ra); if (nearAnyone(r.x, r.z, 380)) continue; // never pops in in front of anybody
     if (!laneFree(e, dir, lane, s, c, 45, 45)) continue;
     c.mode = 'edge'; c.e = e; c.s = s; c.dir = dir; c.lane = c.tlane = lane; c.d = laneD(e, dir, lane); c.latV = 0; c.x = r.x; c.z = r.z;
     // around Nagisa the port fills the roads with lorries
@@ -200,18 +205,23 @@ function computeTarget(px, pz){
   }
   return Math.min(TRAFFIC_N, Math.round(sum));
 }
+let spawnRR = 0;
 function updateTraffic(dt){
+  if (TRAFFIC_NET.off){ for (const c of traffic) if (c.mode !== 'park') parkCar(c); bucketMovers(); return; } // traffic switched off (solo only)
+  if (TRAFFIC_NET.remote && TRAFFIC_NET.step){ TRAFFIC_NET.step(dt); return; }                               // showing the room host's traffic
   bucketMovers();
-  const px = car.x, pz = car.z;
-  targetT -= dt; if (targetT <= 0){ targetT = 1.5; trafficTarget = computeTarget(px, pz); }
+  const px = car.x, pz = car.z, C = [[px, pz]]; for (const p of TRAFFIC_NET.centers) C.push([p.x, p.z]);
+  const dMin = (x, z) => { let d = Infinity; for (const [cx, cz] of C) d = Math.min(d, Math.hypot(x - cx, z - cz)); return d; };
+  targetT -= dt; if (targetT <= 0){ targetT = 1.5; let sum = 0; C.forEach(([cx, cz], i) => { if (i === 0 || C.slice(0, i).every(([ax, az]) => Math.hypot(ax - cx, az - cz) > 1500)) sum += computeTarget(cx, cz); }); trafficTarget = Math.min(TRAFFIC_N, sum); }
   let active = 0; for (const c of traffic) if (c.mode !== 'park') active++;
   let spawns = 0;
   for (const c of traffic){
-    if (c.mode === 'park'){ c.parkT -= dt; if (c.parkT <= 0 && spawns < 8 && active < trafficTarget){ spawns++; if (spawnCar(c, px, pz)) active++; } else if (c.parkT <= 0) c.parkT = 0.3 + rnd() * 0.5; continue; }
+    if (c.mode === 'net'){ parkCar(c); continue; } // left over from showing a host's traffic
+    if (c.mode === 'park'){ c.parkT -= dt; if (c.parkT <= 0 && spawns < 8 && active < trafficTarget){ spawns++; const [sx, sz] = C[spawnRR++ % C.length]; if (spawnCar(c, sx, sz)) active++; } else if (c.parkT <= 0) c.parkT = 0.3 + rnd() * 0.5; continue; }
     // too many for this stretch: quietly drop ones that are far away
-    if (active > trafficTarget * 1.15 + 2 && Math.hypot(c.x - px, c.z - pz) > 800){ parkCar(c); active--; continue; }
-    // far away: recycle
-    const dp = Math.hypot(c.x - px, c.z - pz);
+    const dp = dMin(c.x, c.z);
+    if (active > trafficTarget * 1.15 + 2 && dp > 800){ parkCar(c); active--; continue; }
+    // far away from everybody: recycle
     if (dp > 1350 || (c.stuck > 20 && dp > 120)){ parkCar(c); continue; }
     if (c.mode === 'conn'){ moveConn(c, dt); continue; }
     moveOnEdge(c, dt);
@@ -258,6 +268,10 @@ function moveOnEdge(c, dt){
     if (c.ghost > 0){ gap = Infinity; lv = 0; } // squeezing past a jam: only you count
     if (g < gap){ gap = g; lv = Math.max(0, Math.hypot(car.vx, car.vy) * Math.cos(angWrap(car.h - c.h))); byPlayer = g < 25; }
   }
+  // friends in an online room: brake for them the same way
+  for (const p of TRAFFIC_NET.centers){ const fw = (p.x - c.x) * Math.sin(c.h) + (p.z - c.z) * Math.cos(c.h); if (fw <= 0 || fw > 40) continue;
+    const lt = (p.x - c.x) * Math.cos(c.h) - (p.z - c.z) * Math.sin(c.h); if (Math.abs(lt) > c.wid / 2 + 1.4 || Math.abs(p.y - c.y) > 3) continue;
+    const g = fw - c.len / 2 - 2.3; if (g < gap){ gap = g; lv = Math.max(0, p.v * Math.cos(angWrap(p.h - c.h))); } }
   // the junction ahead: wait your turn
   const R = nodeR(n, e);
   let stopAt = Infinity;

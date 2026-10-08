@@ -477,10 +477,12 @@ const STRIPES = [0xf2f2f2, 0xf2f2f2, 0xf2f2f2, 0x15161a, 0xff8a1e, 0x15161a, 0x1
 function setPaint(k){ if (!PAINTS[k]) k = 0; pPaint.color.setHex(PAINTS[k].hex); pPaint.metalness = PAINTS[k].metal ?? 0.6; pPaint.roughness = PAINTS[k].rough ?? 0.26; STRIPE.color.setHex(STRIPES[k] ?? 0xf2f2f2); const el = $('paint' + k); if (el) el.checked = true; }
 paintsEl.addEventListener('change', e => { if (heistLock()){ setPaint(STATE.paint); toast('ON THE JOB', 'A NEW COLOUR NEEDS A RESPRAY: ANY GARAGE OR TUNE SHOP, $1,500', '#ffb04a'); return; } STATE.paint = +e.target.value; setPaint(STATE.paint); saveState(); });
 document.querySelectorAll('input[name=trans]').forEach(el => el.addEventListener('change', () => { opts.auto = $('tAuto').checked; STATE.trans = opts.auto ? 'auto' : 'manual'; flags(); }));
+document.querySelectorAll('input[name=traffic]').forEach(el => el.addEventListener('change', () => { STATE.trafficOff = $('trOff').checked; saveState(); }));
 document.querySelectorAll('input[name=assist]').forEach(el => el.addEventListener('change', () => { opts.assist = $('aOn').checked; STATE.assist = opts.assist; flags(); }));
 function saveLine(){ const s = STATE; $('saveLine').innerHTML = `SAVED: <b>$${Math.round(s.cash).toLocaleString()}</b> · WANTED <i>${starText(s.stars)}</i> · UPGRADES ${Object.values(s.up).reduce((a, b) => a + b, 0)}/21 · ${(s.odo / 1000).toFixed(0)} km DRIVEN · STORY: ${STATE.lore && STATE.lore.complete ? 'COMPLETE' : STATE.lore && STATE.lore.found ? 'CHAPTER ' + STATE.lore.ch + ' / ' + LORE.length : 'NOT STARTED'}`; }
 let backFromMenu = false; // came to the menu mid-drive (from pause): carry on from the same spot
 $('go').addEventListener('click', () => {
+  if (!START_STATION) return; // the world is still loading
   sfx.init(); sfx.resume();
   started = true; $('menu').hidden = true; $('hud').hidden = false; cam.init = false;
   if (backFromMenu){ backFromMenu = false; $('go').textContent = 'Start at the gas station'; toast(CAR_MODELS[CARV.id].name, 'BACK ON THE ROAD', '#7fe3ff'); return; }
@@ -611,7 +613,7 @@ function boot(){
   const times = buildWorld();
   placePolice(); perfSetup();
   setCar(STATE.car || 'raijin'); { const r = $('car-' + CARV.id); if (r) r.checked = true; }
-  setPaint(STATE.paint); opts.auto = STATE.trans !== 'manual'; opts.assist = STATE.assist !== false; $('tAuto').checked = opts.auto; $('tMan').checked = !opts.auto; $('aOn').checked = opts.assist; $('aOff').checked = !opts.assist; flags();
+  setPaint(STATE.paint); opts.auto = STATE.trans !== 'manual'; opts.assist = STATE.assist !== false; $('tAuto').checked = opts.auto; $('tMan').checked = !opts.auto; $('aOn').checked = opts.assist; $('aOff').checked = !opts.assist; $('trOn').checked = !STATE.trafficOff; $('trOff').checked = !!STATE.trafficOff; flags();
   spawnAt(START_STATION);
   updateChunks(car.x, car.z, 999);
   for (const p of NearPool.all) p.update(car.x, car.z, true);
